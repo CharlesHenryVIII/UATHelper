@@ -82,16 +82,50 @@ bool InputTextMultilineDynamicSize(const std::string& title, std::string& s, ImG
     return ImGui::InputTextMultiline(title.c_str(), const_cast<char*>(title.data()), s.capacity(), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 2), flags | ImGuiInputTextFlags_CallbackResize, DynamicTextCallback, &s);
 }
 
+template <typename T>
+struct ExitScope
+{
+    T lambda;
+    ExitScope(T lambda): lambda(lambda){ }
+    ~ExitScope(){ lambda();}
+};
 
-#if 0
+struct ExitScopeHelp
+{
+    template<typename T>
+    ExitScope<T> operator+(T t) { return t; }
+};
+
+#define _UATH_CONCAT(a, b) a ## b
+#define UATH_CONCAT(a, b) _UATH_CONCAT(a, b)
+
+#define DEFER auto UATH_CONCAT(defer__, __LINE__) = ExitScopeHelp() + [&]()
+
+template <typename T>
+[[nodiscard]] T Min(T a, T b)
+{
+    return a < b ? a : b;
+}
+
+ template <typename T>
+[[nodiscard]] T Max(T a, T b)
+{
+    return a > b ? a : b;
+}
+
+template <typename T>
+[[nodiscard]] T Clamp(T v, T min, T max)
+{
+    return Max(min, Min(max, v));
+}
+
+
 void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& data, std::string& inputString, int selectedIndex)
-#else
-void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& data, std::string& inputString)
-#endif
 {
     std::string sectionTitleEvents = sectionTitle + " Events:";
     if (ImGui::TreeNode(sectionTitleEvents.c_str()))
     {
+        DEFER{ ImGui::TreePop(); };
         bool inputSuccess = false;
         std::string textInputTitle = "##" + sectionTitle + " Event";
         inputSuccess |= InputTextDynamicSize(textInputTitle.c_str(), inputString, ImGuiInputTextFlags_EnterReturnsTrue);
@@ -102,10 +136,11 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
             data.push_back({ inputString });
             inputString.clear();
         }
+        if (data.size() == 0)
+            return;
 
-#if 1
 
-        ImGuiTableFlags tableFlags = 0 |
+        ImGuiTableFlags tableFlags =
             ImGuiTableFlags_RowBg |
             ImGuiTableFlags_BordersV |
             ImGuiTableFlags_BordersOuterV |
@@ -113,69 +148,51 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
             ImGuiTableFlags_BordersH |
             ImGuiTableFlags_BordersOuterH |
             ImGuiTableFlags_BordersInnerH |
-            //ImGuiTableFlags_SizingStretchProp |
-            //ImGuiTableFlags_SizingFixedFit | 
-            //ImGuiTableFlags_SizingStretchSame | 
             ImGuiTableFlags_ScrollX | 
-            //ImGuiTableFlags_NoBordersInBody |
-            //ImGuiTableFlags_Resizable |
+            ImGuiTableFlags_ScrollY | 
             ImGuiTableFlags_NoSavedSettings;
-            //ImGuiTableFlags_NoBordersInBodyUntilResize;
 
-        const int tableColumnCount = 3;
-        if (ImGui::BeginTable("table_advanced", tableColumnCount, tableFlags, ImVec2(0, 0), 0.0f))
+        //NOTE(CSH): 1 larger than the array to have size leftover for the horizontal scroll bar
+        //capping the height at 5 so you can see the top row while scrolling horizontally
+        //TODO: change the max height to varry with the size of the child window
+        const int maxTableHeight = 5;
+        ImVec2 tableSize = ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * (Min(maxTableHeight, (int)data.size()) + 1)); 
+        const int tableColumnCount = 2;
+        if (ImGui::BeginTable("table_advanced", tableColumnCount, tableFlags, tableSize, 0.0f))
         {
-            // Declare columns
-            // We use the "user_id" parameter of TableSetupColumn() to specify a user id that will be stored in the sort specifications.
-            // This is so our sort function can identify a column given our own identifier. We could also identify them based on their index!
+            DEFER{ ImGui::EndTable(); };
 
-            ImGuiTableColumnFlags columnFlags = 0;
-                //ImGuiTableColumnFlags_DefaultSort |
-                //ImGuiTableColumnFlags_WidthFixed |
-                //ImGuiTableColumnFlags_NoHide;
-            ImGui::TableSetupColumn("String",   columnFlags | ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("Status",   columnFlags | ImGuiTableColumnFlags_WidthFixed /*, 70.0f*/);    //TODO: Fix magic numbers
-            ImGui::TableSetupColumn("Buttons",  columnFlags | ImGuiTableColumnFlags_WidthFixed /*, 95.0f*/);   //TODO: Fix magic numbers
-            int freeze_cols, freeze_rows;
-            freeze_cols = freeze_rows = 1;
-            ImGui::TableSetupScrollFreeze(freeze_cols, freeze_rows); //??
-
-            //ImGui::TableHeadersRow();
-
-            // Show data
-            // FIXME-TABLE FIXME-NAV: How we can get decent up/down even though we have the buttons here?
-            ImGui::PushButtonRepeat(true);
+            const ImGuiTableColumnFlags columnFlags = ImGuiTableColumnFlags_WidthFixed;
+            assert(data.size());
+            float longestText = 0;
+            for (const auto& item : data)
             {
-                //ImGui::TableHeadersRow();
+                ImVec2 textSize = ImGui::CalcTextSize(item.name.c_str());
+                longestText = Max(longestText, textSize.x);
+            }
+            ImGui::TableSetupScrollFreeze(1, 0);
+            ImGui::TableSetupColumn("Status",   columnFlags | ImGuiTableColumnFlags_NoHide);
+            ImGui::TableSetupColumn("String",   columnFlags, longestText);
+
+            //ImGui::PushButtonRepeat(true);
+            //DEFER{ ImGui::PopButtonRepeat(); };
+            {
                 for (int row_n = 0; row_n < data.size(); row_n++)
                 {
                     auto item = data[row_n];
 
                     ImGui::PushID(item.name.c_str());
+                    DEFER{ ImGui::PopID(); };
+
                     ImGui::TableNextRow(ImGuiTableRowFlags_None, 0);
-
-                    ImGui::TableSetColumnIndex(0);
-                    ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
-                    ImGui::Selectable(item.name.c_str(), false, selectable_flags, ImVec2(0, 0));
-                    if (ImGui::IsItemActive() && !ImGui::IsItemHovered())
+                    if (ImGui::TableSetColumnIndex(0))
                     {
-                        int nextIndex = row_n + (ImGui::GetMouseDragDelta(0).y < 0.f ? -1 : 1);
-                        if (nextIndex >= 0 && nextIndex < data.size())
-                        {
-                            data[row_n] = data[nextIndex];
-                            data[nextIndex] = item;
-                            ImGui::ResetMouseDragDelta();
-                        }
-                    }
-
-                    if (ImGui::TableSetColumnIndex(1))
-                    {
-                        std::string buttonLabel = "disabled";
+                        std::string buttonLabel = "Disabled";
                         float color = 0.0f;
                         if (data[row_n].enabled)
                         {
                             color = 2.0f / 7.0f;
-                            buttonLabel = "enabled";
+                            buttonLabel = "Enabled";
                         }
                         
                         ImGui::PushStyleColor(ImGuiCol_Button,          (ImVec4)ImColor::HSV(color, 0.6f, 0.6f));
@@ -188,53 +205,23 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
                         ImGui::PopStyleColor(3);
                     }
 
-                    if (ImGui::TableSetColumnIndex(2))
+
+                    ImGui::TableSetColumnIndex(1);
+                    ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
+                    ImGui::Selectable(item.name.c_str(), false, selectable_flags, ImVec2(0, 0));
+                    if (ImGui::IsItemActive() && !ImGui::IsItemHovered())
                     {
-                        ImGui::SmallButton("Edit"); ImGui::SameLine();
-
-                        ImGui::PushStyleColor(ImGuiCol_Button,          (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,   (ImVec4)ImColor::HSV(0.0f, 0.7f, 0.7f));
-                        ImGui::PushStyleColor(ImGuiCol_ButtonActive,    (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
-                        ImGui::SmallButton("Delete");
-                        ImGui::PopStyleColor(3);
+                        int nextIndex = row_n + (ImGui::GetMouseDragDelta(0).y < 0.f ? -1 : 1);
+                        if (nextIndex >= 0 && nextIndex < data.size())
+                        {
+                            data[row_n] = data[nextIndex];
+                            data[nextIndex] = item;
+                            ImGui::ResetMouseDragDelta();
+                        }
                     }
-
-
-                    ImGui::PopID();
-                }
-            }
-            ImGui::PopButtonRepeat();
-            ImGui::EndTable();
-        }
-        ImGui::TreePop();
-#else
-        for (int i = 0; i < data.size(); i++)
-        {
-            auto currentCopy = data[i];
-            ImGui::Selectable(currentCopy.name.c_str());
-            ImGui::SameLine();
-            ImGui::Button("Edit");
-
-            ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Button, (ImVec4)ImColor::HSV(0.0f, 0.6f, 0.6f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV(0.0f, 0.7f, 0.7f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.0f, 0.8f, 0.8f));
-            ImGui::Button("Delete");
-            ImGui::PopStyleColor(3);
-
-            if (ImGui::IsItemActive() && !ImGui::IsItemHovered())
-            {
-                int nextIndex = i + (ImGui::GetMouseDragDelta(0).y < 0.f ? -1 : 1);
-                if (nextIndex >= 0 && nextIndex < data.size())
-                {
-                    data[i] = data[nextIndex];
-                    data[nextIndex] = currentCopy;
-                    ImGui::ResetMouseDragDelta();
                 }
             }
         }
-        ImGui::TreePop();
-#endif
     }
 }
 
@@ -414,6 +401,7 @@ int main(int, char**)
 
         if (ImGui::Begin("Main", nullptr, windowFlags))
         {
+            DEFER{ ImGui::End(); };
             ImGuiWindowFlags sectionFlags = 
 #if 1
                 ImGuiWindowFlags_NoResize | 
@@ -491,60 +479,49 @@ int main(int, char**)
                 ImGui::EndChild();
             }
 
-            ImVec2 executionScale = { 0.7f, 0.15f };
+            ImVec2 executionScale = { 0.7f, 0.25f };
             ImVec2 executionSize = HadamardProduct(viewport->WorkSize, executionScale);
             ImGui::SetNextWindowPos(ImVec2({ viewport->WorkSize.x / 2, platformSize.y + switchesSize.y }), 0, ImVec2(0.5f, 0.0f));
             if (ImGui::BeginChild("Execution", executionSize, true, sectionFlags))
             {
                 TextCentered("Execution Settings");
 
-#if 1
                 static std::string preBuildInput;
-                ExecutionSection("Pre-Build", preBuildEvents, preBuildInput);
+                static int preBuildSelectionIndex = -1;
+                ExecutionSection("Pre-Build", preBuildEvents, preBuildInput, preBuildSelectionIndex);
 
                 static std::string postBuildInput;
-                ExecutionSection("Post-Build", postBuildEvents, postBuildInput);
-#else
-                std::string sectionTitle = "Pre-Build";
-                if (ImGui::TreeNode("%s Events:", sectionTitle.c_str()))
-                {
-                    //ImGui::Text("%s Events:", sectionTitle.c_str());
-                    //ImGui::SameLine();
-
-                    static std::string preBuildInput;
-                    bool preBuildSuccess = false;
-                    std::string textInputTitle = "##" + sectionTitle + " Event";
-                    preBuildSuccess |= InputTextDynamicSize(textInputTitle.c_str(), preBuildInput, ImGuiInputTextFlags_EnterReturnsTrue);
-                    ImGui::SameLine();
-                    preBuildSuccess |= ImGui::Button("Add");
-                    if (preBuildSuccess)
-                    {
-                        preBuildInput;
-                        preBuildEvents.push_back({ preBuildInput });
-                        preBuildInput.clear();
-                    }
-
-                    for (int i = 0; i < preBuildEvents.size(); i++)
-                    {
-                        auto currentCopy = preBuildEvents[i];
-                        ImGui::Selectable(currentCopy.name.c_str());
-                        if (ImGui::IsItemActive() && !ImGui::IsItemHovered())
-                        {
-                            int nextIndex = i + (ImGui::GetMouseDragDelta(0).y < 0.f ? -1 : 1);
-                            if (nextIndex >= 0 && nextIndex < preBuildEvents.size())
-                            {
-                                preBuildEvents[i] = preBuildEvents[nextIndex];
-                                preBuildEvents[nextIndex] = currentCopy;
-                                ImGui::ResetMouseDragDelta();
-                            }
-                        }
-                    }
-                    ImGui::TreePop();
-                }
-#endif
+                static int postBuildSelectionIndex = -1;
+                ExecutionSection("Post-Build", postBuildEvents, postBuildInput, postBuildSelectionIndex);
                 ImGui::EndChild();
             }
-            ImGui::End();
+
+            ImVec2 commandScale = { 0.5f, 0.2f };
+            ImVec2 commandSize = HadamardProduct(viewport->WorkSize, commandScale);
+            ImGui::SetNextWindowPos(ImVec2({ viewport->WorkSize.x / 2, platformSize.y + switchesSize.y + executionSize.y }), 0, ImVec2(0.5f, 0.0f));
+            if (ImGui::BeginChild("Command Line", commandSize, true, sectionFlags))
+            {
+                DEFER{ ImGui::EndChild(); };
+
+                static std::string finalCommandLine = "This is just a test commandline output lmao";
+                InputTextMultilineDynamicSize("Command Line Output Text", finalCommandLine, ImGuiInputTextFlags_AutoSelectAll/* | ImGuiInputTextFlags_ReadOnly*/);
+                //ImGui::TextWrapped("FAKE OUTPUT TEXT LMAO");
+
+                if (ImGui::Button("RUN"))
+                {
+
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Save"))
+                {
+
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Export"))
+                {
+
+                }
+            }
         }
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
