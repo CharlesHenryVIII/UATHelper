@@ -123,6 +123,7 @@ template <typename T>
 void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& data, std::string& inputString, int selectedIndex)
 {
     std::string sectionTitleEvents = sectionTitle + " Events:";
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
     if (ImGui::TreeNode(sectionTitleEvents.c_str()))
     {
         DEFER{ ImGui::TreePop(); };
@@ -148,9 +149,9 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
             ImGuiTableFlags_BordersH |
             ImGuiTableFlags_BordersOuterH |
             ImGuiTableFlags_BordersInnerH |
-            ImGuiTableFlags_ScrollX | 
-            ImGuiTableFlags_ScrollY | 
-            ImGuiTableFlags_NoSavedSettings;
+            ImGuiTableFlags_ScrollX |
+            ImGuiTableFlags_ScrollY;
+            //ImGuiTableFlags_NoSavedSettings;
 
         //NOTE(CSH): 1 larger than the array to have size leftover for the horizontal scroll bar
         //capping the height at 5 so you can see the top row while scrolling horizontally
@@ -223,6 +224,11 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
             }
         }
     }
+}
+
+void _SetClipboardText(void* data, const char* text)
+{
+    SDL_SetClipboardText(text);
 }
 
 
@@ -300,6 +306,7 @@ int main(int, char**)
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.SetClipboardTextFn = _SetClipboardText;
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
@@ -503,24 +510,36 @@ int main(int, char**)
             {
                 DEFER{ ImGui::EndChild(); };
 
-                static std::string finalCommandLine = "This is just a test commandline output lmao";
-                InputTextMultilineDynamicSize("Command Line Output Text", finalCommandLine, ImGuiInputTextFlags_AutoSelectAll/* | ImGuiInputTextFlags_ReadOnly*/);
-                //ImGui::TextWrapped("FAKE OUTPUT TEXT LMAO");
+                static std::string finalCommandLine = "This is just a test commandline output lmao QWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW";
+                //InputTextMultilineDynamicSize("Command Line Output Text", finalCommandLine, ImGuiInputTextFlags_AutoSelectAll/* | ImGuiInputTextFlags_ReadOnly*/);
+                //ImGui::TextWrapped("FAKE OUTPUT TEXT LMAO);
+                ImGui::TextWrapped(finalCommandLine.c_str());
 
+                if (ImGui::Button("Copy To Clipboard"))
+                {
+                    SDL_SetClipboardText(finalCommandLine.c_str());
+                }
+                ImGui::SameLine();
+                ImGui::BeginDisabled();
                 if (ImGui::Button("RUN"))
                 {
 
                 }
+                ImGui::EndDisabled();
                 ImGui::SameLine();
+                ImGui::BeginDisabled();
                 if (ImGui::Button("Save"))
                 {
 
                 }
+                ImGui::EndDisabled();
                 ImGui::SameLine();
+                ImGui::BeginDisabled();
                 if (ImGui::Button("Export"))
                 {
 
                 }
+                ImGui::EndDisabled();
             }
         }
 
