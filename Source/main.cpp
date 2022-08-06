@@ -18,6 +18,7 @@
 #include <SDL_opengl.h>
 #endif
 
+#define DEVELOPMENT 1
 
 
 
@@ -117,6 +118,42 @@ template <typename T>
 [[nodiscard]] T Clamp(T v, T min, T max)
 {
     return Max(min, Min(max, v));
+}
+
+void NameStatusButtonAdd(const std::string& buttonName, std::string& text, std::vector<NameStatus>& data, int codeLine)
+{
+    ImGui::SameLine();
+    std::string id = "##" + std::to_string(codeLine);
+    float buttonSize = 25.0f;
+#if 1
+    float inputSize = 100.0f;
+    float availableWidth = ImGui::GetContentRegionAvail().x;
+    if (availableWidth < inputSize)
+    {
+        ImGui::NewLine();
+    }
+#else
+    float inputSize = 20.0f;
+    //Scaling input size based on region left
+    float availableWidth = ImGui::GetContentRegionAvail().x;
+    if (availableWidth < inputSize)
+    {
+        ImGui::NewLine();
+    }
+    availableWidth = ImGui::GetContentRegionAvail().x;
+    inputSize = availableWidth * 0.25f
+#endif
+    ImGui::SetNextItemWidth(inputSize - buttonSize);
+    InputTextDynamicSize(id, text);
+    ImGui::SameLine();
+    std::string fullButtonName = "Add " + buttonName;
+    if (ImGui::Button(fullButtonName.c_str()) && text.size())
+    {
+        NameStatus ns = {};
+        ns.name = text;
+        data.push_back(ns);
+        text.clear();
+    }
 }
 
 
@@ -226,9 +263,17 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
     }
 }
 
-void _SetClipboardText(void* data, const char* text)
+void HelpMarker(const std::string& desc)
 {
-    SDL_SetClipboardText(text);
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
 }
 
 
@@ -306,7 +351,6 @@ int main(int, char**)
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.SetClipboardTextFn = _SetClipboardText;
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
@@ -317,34 +361,53 @@ int main(int, char**)
     // Setup Platform/Renderer backends
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init(glsl_version);
+    
+    std::string mainPath;
+    std::string projectPath;
 
     int platformSelection = 0;
-    std::vector<std::string> platformOptions;
-    platformOptions.push_back("Win64");
-    platformOptions.push_back("XboxOne");
-    platformOptions.push_back("XboxOneGDK");
-    platformOptions.push_back("XSX");
-    platformOptions.push_back("PS4");
-    platformOptions.push_back("PS5");
+    std::vector<NameStatus> platformOptions;
+    platformOptions.push_back({ "Win64" });
+    platformOptions.push_back({ "XboxOne" });
+    platformOptions.push_back({ "XboxOneGDK" });
+    platformOptions.push_back({ "XSX" });
+    platformOptions.push_back({ "PS4" });
+    platformOptions.push_back({ "PS5" });
 
     std::vector<NameStatus> versionOptions;
-    versionOptions.push_back({ "Test" });
-    versionOptions.push_back({ "Debug" });
     versionOptions.push_back({ "Shipping" });
+    versionOptions.push_back({ "Test" });
     versionOptions.push_back({ "Development" });
+    versionOptions.push_back({ "Debug" });
 
     std::vector<NameStatus> switchOptions;
-    switchOptions.push_back({"DDC=NoShared"});
-    switchOptions.push_back({"cook"});
-    switchOptions.push_back({"package"});
-    switchOptions.push_back({"Nativize"});
+    switchOptions.push_back({ "AdditionalCookerOptions=\"-ddc=noshared\"" });
+    switchOptions.push_back({ "AdditionalCookerOptions=\"-ddc=ddcreadonly\"" });
+    switchOptions.push_back({ "distribution" });
+    switchOptions.push_back({ "MapIniSectionsToCook=DevCookMaps" });
+    switchOptions.push_back({ "cook" });
+    switchOptions.push_back({ "NoP4" });
+    switchOptions.push_back({ "manifests" });
+    switchOptions.push_back({ "pak" });
+    switchOptions.push_back({ "build" });
+    switchOptions.push_back({ "stage" });
+    switchOptions.push_back({ "compress" });
+    switchOptions.push_back({ "dedicatedserver" });
+    switchOptions.push_back({ "package" });
+    switchOptions.push_back({ "skipcook" });
+    switchOptions.push_back({ "skipbuild" });
 
     std::vector<NameStatus> preBuildEvents;
+#if DEVELOPMENT
     preBuildEvents.push_back({"C:/Users/tonyk/Documents/Apps/cloc-1.90.exe C:/Projects/UATHelper/Source"});
     preBuildEvents.push_back({"AAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                               "AAAAAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                               "aaaaaaAAAAAAAAAAAAAAAAAAAaaaaaaaaaaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"});
+#endif
     std::vector<NameStatus> postBuildEvents;
+
+
+    std::string finalCommandLine;
 
     //ImFont* mainFont = io.Fonts->AddFontFromFileTTF("Assets/DroidSans.ttf", 16);
     //io.Fonts->Build();
@@ -420,10 +483,32 @@ int main(int, char**)
                 ImGuiWindowFlags_NoNav | 
                 ImGuiWindowFlags_NoMove;
 
-            ImVec2 platformScale = { 0.5f, 0.2f };
+            ImVec2 locationScale = { 0.7f, 0.1f };
+            ImVec2 locationSize = HadamardProduct(viewport->WorkSize, locationScale);
+            ImGui::SetNextWindowPos(ImVec2((((1 - locationScale.x) / 2) * viewport->WorkSize.x), locationSize.y), 0, ImVec2(0.0f, 1.0f));
+            if (ImGui::BeginChild("Location", locationSize, true, sectionFlags | ImGuiWindowFlags_NoScrollbar))
+            {
+                DEFER{ ImGui::EndChild(); };
+                TextCentered("File Paths");
+
+                ImGui::Text("Main Dir");
+                ImGui::SameLine();
+                std::string demoMainDir = "C:/UnrealEngine/Project";
+                InputTextDynamicSize("##" + demoMainDir, mainPath);
+                ImGui::SameLine();
+                HelpMarker(demoMainDir);
+
+                ImGui::Text("Path to Project File");
+                ImGui::SameLine();
+                std::string demoProjectPath = "C:/UnrealEngine/Project/Title/title.uproject";
+                InputTextDynamicSize("##" + demoProjectPath, projectPath);
+                ImGui::SameLine();
+                HelpMarker(demoProjectPath);
+            }
+            ImVec2 platformScale = { 0.7f, 0.2f };
             ImVec2 platformSize = HadamardProduct(viewport->WorkSize, platformScale);
-            ImGui::SetNextWindowPos(platformSize, 0, ImVec2(0.5f, 1.0f));
-            if (ImGui::BeginChild("Platform", ImVec2(viewport->WorkSize.x / 2, platformSize.y), true, sectionFlags))
+            ImGui::SetNextWindowPos(ImVec2((((1 - platformScale.x) / 2) * viewport->WorkSize.x), locationSize.y), 0, ImVec2(0.0f, 0.0f));
+            if (ImGui::BeginChild("Platform", platformSize, true, sectionFlags))
             {
                 {
                     TextCentered("Platform Selection");
@@ -433,13 +518,15 @@ int main(int, char**)
                     ImGuiStyle& style = ImGui::GetStyle();
                     for (int i = 0; i < platformOptions.size(); i++)
                     {
-                        float button_szx = ImGui::CalcTextSize(platformOptions[i].c_str()).x + 2 * style.FramePadding.x;
+                        float button_szx = ImGui::CalcTextSize(platformOptions[i].name.c_str()).x + 2 * style.FramePadding.x;
                         float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
                         if (next_button_x2 < window_visible_x2)
                             ImGui::SameLine(0, 1);
-                        ImGui::RadioButton(platformOptions[i].c_str(), &platformSelection, i);
+                        ImGui::RadioButton(platformOptions[i].name.c_str(), &platformSelection, i);
                         last_button_x2 = ImGui::GetItemRectMax().x;
                     }
+                    static std::string name;
+                    NameStatusButtonAdd("Platform", name, platformOptions, __LINE__);
                 }
 
                 {
@@ -458,15 +545,17 @@ int main(int, char**)
                         ImGui::Checkbox(versionOptions[i].name.c_str(), &versionOptions[i].enabled);
                         last_button_x2 = ImGui::GetItemRectMax().x;
                     }
+                    static std::string name;
+                    NameStatusButtonAdd("Version", name, versionOptions, __LINE__);
                 }
 
                 //ImGui::Text("Platform Selection");
                 ImGui::EndChild();
             }
 
-            ImVec2 switchesScale = { 0.5f, 0.2f };
+            ImVec2 switchesScale = { 0.7f, 0.2f };
             ImVec2 switchesSize = HadamardProduct(viewport->WorkSize, switchesScale);
-            ImGui::SetNextWindowPos(ImVec2({ viewport->WorkSize.x / 2, platformSize.y + switchesSize.y / 2 }), 0, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowPos(ImVec2((((1 - switchesScale.x) / 2) * viewport->WorkSize.x), locationSize.y + platformSize.y), 0, ImVec2(0.0f, 0.0f));
             if (ImGui::BeginChild("Switches", switchesSize, true, sectionFlags))
             {
                 TextCentered("Switch Selection");
@@ -483,12 +572,14 @@ int main(int, char**)
                     ImGui::Checkbox(switchOptions[i].name.c_str(), &switchOptions[i].enabled);
                     last_button_x2 = ImGui::GetItemRectMax().x;
                 }
+                static std::string name;
+                NameStatusButtonAdd("Switch", name, switchOptions, __LINE__);
                 ImGui::EndChild();
             }
 
-            ImVec2 executionScale = { 0.7f, 0.25f };
+            ImVec2 executionScale = { 0.7f, 0.3f };
             ImVec2 executionSize = HadamardProduct(viewport->WorkSize, executionScale);
-            ImGui::SetNextWindowPos(ImVec2({ viewport->WorkSize.x / 2, platformSize.y + switchesSize.y }), 0, ImVec2(0.5f, 0.0f));
+            ImGui::SetNextWindowPos(ImVec2((((1 - executionScale.x) / 2) * viewport->WorkSize.x), locationSize.y + platformSize.y + switchesSize.y), 0, ImVec2(0, 0.0f));
             if (ImGui::BeginChild("Execution", executionSize, true, sectionFlags))
             {
                 TextCentered("Execution Settings");
@@ -503,16 +594,52 @@ int main(int, char**)
                 ImGui::EndChild();
             }
 
-            ImVec2 commandScale = { 0.5f, 0.2f };
+            ImVec2 commandScale = { 0.7f, 0.2f };
             ImVec2 commandSize = HadamardProduct(viewport->WorkSize, commandScale);
-            ImGui::SetNextWindowPos(ImVec2({ viewport->WorkSize.x / 2, platformSize.y + switchesSize.y + executionSize.y }), 0, ImVec2(0.5f, 0.0f));
+            ImGui::SetNextWindowPos(ImVec2((((1 - commandScale.x) / 2) * viewport->WorkSize.x), locationSize.y + platformSize.y + switchesSize.y + executionSize.y), 0, ImVec2(0.0f, 0.0f));
             if (ImGui::BeginChild("Command Line", commandSize, true, sectionFlags))
             {
                 DEFER{ ImGui::EndChild(); };
 
-                static std::string finalCommandLine = "This is just a test commandline output lmao QWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW";
-                //InputTextMultilineDynamicSize("Command Line Output Text", finalCommandLine, ImGuiInputTextFlags_AutoSelectAll/* | ImGuiInputTextFlags_ReadOnly*/);
-                //ImGui::TextWrapped("FAKE OUTPUT TEXT LMAO);
+                //static std::string finalCommandLine = "This is just a test commandline output lmao QWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW";
+                finalCommandLine.clear();
+                if (projectPath.size() < 3)
+                {
+                    finalCommandLine = "Please add a path to Project Path";
+                }
+                else
+                {
+                    finalCommandLine += mainPath.c_str();
+                    finalCommandLine += "/Engine/Build/BatchFiles/RunUAT.bat BuildCookRun ";
+                    finalCommandLine += "-project=";
+                    finalCommandLine += projectPath.c_str();
+                    finalCommandLine += " -targetplatform=";
+                    finalCommandLine += platformOptions[platformSelection].name;
+                    finalCommandLine += " -clientconfig=";
+                    bool alreadyOneEnabled = false;
+                    for (const auto& option : versionOptions)
+                    {
+                        if (option.enabled)
+                        {
+                            if (alreadyOneEnabled)
+                                finalCommandLine += "+";
+                            finalCommandLine += option.name;
+                            alreadyOneEnabled = true;
+                        }
+                    }
+                    finalCommandLine += " -servertargetplatform=win64";
+                    finalCommandLine += " -serverconfig=Development";
+
+                    for (const auto& option : switchOptions)
+                    {
+                        if (option.enabled)
+                        {
+                            finalCommandLine += " -";
+                            finalCommandLine += option.name;
+                        }
+                    }
+                }
+
                 ImGui::TextWrapped(finalCommandLine.c_str());
 
                 if (ImGui::Button("Copy To Clipboard"))
@@ -528,7 +655,7 @@ int main(int, char**)
                 ImGui::EndDisabled();
                 ImGui::SameLine();
                 ImGui::BeginDisabled();
-                if (ImGui::Button("Save"))
+                if (ImGui::Button("Save Config"))
                 {
 
                 }
