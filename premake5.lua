@@ -4,12 +4,13 @@ workspace "UATHelper"
 
 project "UATHelper"
    --symbolspath '$(OutDir)$(TargetName).pdb'
-   kind "ConsoleApp"
+   kind "WindowedApp" --WindowedApp --ConsoleApp
    language "C++"
    cppdialect "C++latest"
    targetdir "Build/%{cfg.platform}/%{cfg.buildcfg}"
    objdir "Build/obj/%{cfg.platform}/%{cfg.buildcfg}"
    editandcontinue "Off"
+   characterset "ASCII"
    links {
        "SDL2",
        "SDL2main",
@@ -28,6 +29,7 @@ project "UATHelper"
        --"Contrib/**"
    }
    flags {
+       "MultiProcessorCompile",
        "FatalWarnings",
        "NoPCH",
    }

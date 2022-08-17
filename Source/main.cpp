@@ -7,6 +7,10 @@
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_opengl3.h"
 
+#include "Windows.h"
+#include "Math.h"
+#include "Threading.h"
+
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -29,8 +33,13 @@ struct NameStatus {
 
 
 
+[[nodiscard]] inline ImVec2 HadamardProduct(const ImVec2& a, const ImVec2& b)
+{
+    return { a.x * b.x, a.y * b.y };
+}
 
-void TextCentered(std::string text) {
+void TextCentered(std::string text) 
+{
     float win_width = ImGui::GetWindowSize().x;
     float text_width = ImGui::CalcTextSize(text.c_str()).x;
 
@@ -52,11 +61,6 @@ void TextCentered(std::string text) {
 }
 
 
-[[nodiscard]] inline ImVec2 HadamardProduct(const ImVec2& a, const ImVec2& b)
-{
-    return { a.x * b.x, a.y * b.y };
-}
-
 
 int DynamicTextCallback(ImGuiInputTextCallbackData* data)
 {
@@ -72,7 +76,7 @@ int DynamicTextCallback(ImGuiInputTextCallbackData* data)
     }
     return 0;
 }
-//NOTE: Ideally there would be a function overload that takes a const char* for the title input but the function cannot be determined
+//NOTE(CSH): Ideally there would be a function overload that takes a const char* for the title input but the function cannot be determined
 //since passsing a string could convert to a const char* or be built into a std::string
 bool InputTextDynamicSize(const std::string& title, std::string& s, ImGuiInputTextFlags flags = ImGuiInputTextFlags_None)
 {
@@ -83,42 +87,6 @@ bool InputTextMultilineDynamicSize(const std::string& title, std::string& s, ImG
     return ImGui::InputTextMultiline(title.c_str(), const_cast<char*>(title.data()), s.capacity(), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 2), flags | ImGuiInputTextFlags_CallbackResize, DynamicTextCallback, &s);
 }
 
-template <typename T>
-struct ExitScope
-{
-    T lambda;
-    ExitScope(T lambda): lambda(lambda){ }
-    ~ExitScope(){ lambda();}
-};
-
-struct ExitScopeHelp
-{
-    template<typename T>
-    ExitScope<T> operator+(T t) { return t; }
-};
-
-#define _UATH_CONCAT(a, b) a ## b
-#define UATH_CONCAT(a, b) _UATH_CONCAT(a, b)
-
-#define DEFER auto UATH_CONCAT(defer__, __LINE__) = ExitScopeHelp() + [&]()
-
-template <typename T>
-[[nodiscard]] T Min(T a, T b)
-{
-    return a < b ? a : b;
-}
-
- template <typename T>
-[[nodiscard]] T Max(T a, T b)
-{
-    return a > b ? a : b;
-}
-
-template <typename T>
-[[nodiscard]] T Clamp(T v, T min, T max)
-{
-    return Max(min, Min(max, v));
-}
 
 void NameStatusButtonAdd(const std::string& buttonName, std::string& text, std::vector<NameStatus>& data, int codeLine)
 {
@@ -156,6 +124,17 @@ void NameStatusButtonAdd(const std::string& buttonName, std::string& text, std::
     }
 }
 
+void RemoveStartAndEndSpaces(std::string& s)
+{
+    while (s[0] == ' ')
+    {
+        s.erase(0, 1);
+    }
+    while (s[s.size() - 1] == ' ')
+    {
+        s.erase(s.size() - 1, 1);
+    }
+}
 
 void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& data, std::string& inputString, int selectedIndex)
 {
@@ -171,6 +150,7 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
         inputSuccess |= ImGui::Button("Add");
         if (inputSuccess)
         {
+            RemoveStartAndEndSpaces(inputString);
             data.push_back({ inputString });
             inputString.clear();
         }
@@ -276,6 +256,32 @@ void HelpMarker(const std::string& desc)
     }
 }
 
+bool SeperatePathAndArguments(const std::string& input, std::string& path, std::string& args)
+{
+    char charSeperator = ' ';
+    if (input[0] == '\"')
+    {
+        charSeperator = '\"';
+    }
+    //look for end quote or space
+    s32 i = 1;
+    for (; i < input.size(); i++)
+    {
+        if (input[i] == charSeperator)
+            break;
+    }
+    s32 maxValue = Min<s32>((s32)input.size(), i + 1);
+    path = input.substr(0,          maxValue);
+    if (maxValue == input.size())
+    {
+        args.clear();
+        return false;
+    }
+
+    args = input.substr(maxValue,   input.size() - (maxValue));
+    return true;
+}
+
 
 
 
@@ -347,6 +353,7 @@ int main(int, char**)
     SDL_GL_MakeCurrent(window, gl_context);
     SDL_GL_SetSwapInterval(1); // Enable vsync
 
+    Threading& threading = Threading::GetInstance();
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -398,16 +405,11 @@ int main(int, char**)
     switchOptions.push_back({ "skipbuild" });
 
     std::vector<NameStatus> preBuildEvents;
-#if DEVELOPMENT
-    preBuildEvents.push_back({"C:/Users/tonyk/Documents/Apps/cloc-1.90.exe C:/Projects/UATHelper/Source"});
-    preBuildEvents.push_back({"AAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                              "AAAAAAAAAAAAAAAAAAAAAAAAAaaaaaaaaaaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                              "aaaaaaAAAAAAAAAAAAAAAAAAAaaaaaaaaaaAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"});
-#endif
     std::vector<NameStatus> postBuildEvents;
 
 
     std::string finalCommandLine;
+    bool buildRunning = false;
 
     //ImFont* mainFont = io.Fonts->AddFontFromFileTTF("Assets/DroidSans.ttf", 16);
     //io.Fonts->Build();
@@ -428,8 +430,7 @@ int main(int, char**)
     //IM_ASSERT(font != NULL);
 
     // Our state
-    bool show_demo_window = true;
-    bool show_another_window = false;
+    bool show_demo_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Main loop
@@ -456,6 +457,8 @@ int main(int, char**)
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
         //ImGui::PushFont(mainFont);
+        if (!threading.GetJobsInFlight())
+            buildRunning = false;
 
 
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -471,7 +474,7 @@ int main(int, char**)
 
         if (ImGui::Begin("Main", nullptr, windowFlags))
         {
-            DEFER{ ImGui::End(); };
+            //DEFER{ ImGui::End(); };
             ImGuiWindowFlags sectionFlags = 
 #if 1
                 ImGuiWindowFlags_NoResize | 
@@ -488,7 +491,11 @@ int main(int, char**)
             ImGui::SetNextWindowPos(ImVec2((((1 - locationScale.x) / 2) * viewport->WorkSize.x), locationSize.y), 0, ImVec2(0.0f, 1.0f));
             if (ImGui::BeginChild("Location", locationSize, true, sectionFlags | ImGuiWindowFlags_NoScrollbar))
             {
-                DEFER{ ImGui::EndChild(); };
+                //DEFER{ ImGui::EndChild(); };
+#ifdef DEBUG
+                ImGui::Checkbox("Show Demo Window", &show_demo_window);
+                ImGui::SameLine();
+#endif
                 TextCentered("File Paths");
 
                 ImGui::Text("Main Dir");
@@ -505,6 +512,7 @@ int main(int, char**)
                 ImGui::SameLine();
                 HelpMarker(demoProjectPath);
             }
+            ImGui::EndChild();
             ImVec2 platformScale = { 0.7f, 0.2f };
             ImVec2 platformSize = HadamardProduct(viewport->WorkSize, platformScale);
             ImGui::SetNextWindowPos(ImVec2((((1 - platformScale.x) / 2) * viewport->WorkSize.x), locationSize.y), 0, ImVec2(0.0f, 0.0f));
@@ -550,8 +558,8 @@ int main(int, char**)
                 }
 
                 //ImGui::Text("Platform Selection");
-                ImGui::EndChild();
             }
+            ImGui::EndChild();
 
             ImVec2 switchesScale = { 0.7f, 0.2f };
             ImVec2 switchesSize = HadamardProduct(viewport->WorkSize, switchesScale);
@@ -574,8 +582,8 @@ int main(int, char**)
                 }
                 static std::string name;
                 NameStatusButtonAdd("Switch", name, switchOptions, __LINE__);
-                ImGui::EndChild();
             }
+            ImGui::EndChild();
 
             ImVec2 executionScale = { 0.7f, 0.3f };
             ImVec2 executionSize = HadamardProduct(viewport->WorkSize, executionScale);
@@ -591,19 +599,19 @@ int main(int, char**)
                 static std::string postBuildInput;
                 static int postBuildSelectionIndex = -1;
                 ExecutionSection("Post-Build", postBuildEvents, postBuildInput, postBuildSelectionIndex);
-                ImGui::EndChild();
             }
+            ImGui::EndChild();
 
+            bool commandLineInvalid = projectPath.size() < 3;
             ImVec2 commandScale = { 0.7f, 0.2f };
             ImVec2 commandSize = HadamardProduct(viewport->WorkSize, commandScale);
             ImGui::SetNextWindowPos(ImVec2((((1 - commandScale.x) / 2) * viewport->WorkSize.x), locationSize.y + platformSize.y + switchesSize.y + executionSize.y), 0, ImVec2(0.0f, 0.0f));
             if (ImGui::BeginChild("Command Line", commandSize, true, sectionFlags))
             {
-                DEFER{ ImGui::EndChild(); };
 
                 //static std::string finalCommandLine = "This is just a test commandline output lmao QWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW";
                 finalCommandLine.clear();
-                if (projectPath.size() < 3)
+                if (commandLineInvalid)
                 {
                     finalCommandLine = "Please add a path to Project Path";
                 }
@@ -647,12 +655,37 @@ int main(int, char**)
                     SDL_SetClipboardText(finalCommandLine.c_str());
                 }
                 ImGui::SameLine();
-                ImGui::BeginDisabled();
+                if (buildRunning || commandLineInvalid)
+                    ImGui::BeginDisabled();
                 if (ImGui::Button("RUN"))
                 {
-
+                    s32 enabledPreBuildEventsCount = 0;
+                    for (s32 i = 0; i < preBuildEvents.size(); i++)
+                    {
+                        if (preBuildEvents[i].enabled)
+                        {
+                            std::string path;
+                            std::string args;
+                            SeperatePathAndArguments(preBuildEvents[i].name, path, args);
+                            RemoveStartAndEndSpaces(path);
+                            if (args.size())
+                                RemoveStartAndEndSpaces(args);
+                            enabledPreBuildEventsCount++;
+                            StartProcessJob* job = new StartProcessJob();
+                            job->applicationPath = path;
+                            job->arguments = args;
+                            threading.SubmitJob(job);
+                        }
+                    }
+                    s32 enabledPostBuildEventsCount = 0;
+                    for (s32 i = 0; i < postBuildEvents.size(); i++)
+                    {
+                        if (postBuildEvents[i].enabled)
+                            enabledPostBuildEventsCount++;
+                    }
                 }
-                ImGui::EndDisabled();
+                if (buildRunning || commandLineInvalid)
+                    ImGui::EndDisabled();
                 ImGui::SameLine();
                 ImGui::BeginDisabled();
                 if (ImGui::Button("Save Config"))
@@ -668,47 +701,14 @@ int main(int, char**)
                 }
                 ImGui::EndDisabled();
             }
-        }
-
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
-
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to created a named window.
-        //{
-        //    static float f = 0.0f;
-        //    static int counter = 0;
-
-        //    ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-        //    ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-        //    ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-        //    ImGui::Checkbox("Another Window", &show_another_window);
-
-        //    ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-        //    ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-        //    if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-        //        counter++;
-        //    ImGui::SameLine();
-        //    ImGui::Text("counter = %d", counter);
-
-        //    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-        //    ImGui::End();
-        //}
-
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
+            ImGui::EndChild();
             ImGui::End();
         }
 
-        // Rendering
+        if (show_demo_window)
+            ImGui::ShowDemoWindow(&show_demo_window);
 
+        // Rendering
         //ImGui::PopFont();
         ImGui::Render();
         glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
