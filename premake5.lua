@@ -46,7 +46,6 @@ project "UATHelper"
        "Contrib/imgui/*.h",
        "Contrib/imgui/backends/imgui_impl_opengl3.cpp",
        "Contrib/imgui/backends/imgui_impl_sdl.cpp",
-       "Contrib/yaml.cpp"
    }
 
 
