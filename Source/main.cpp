@@ -10,6 +10,7 @@
 #include "Windows.h"
 #include "Math.h"
 #include "Threading.h"
+#include "Config.h"
 
 #include <stdio.h>
 #include <string>
@@ -26,16 +27,28 @@
 
 
 
-struct NameStatus {
-    std::string name;
-    bool enabled = false;
-};
-
-
-
 [[nodiscard]] inline ImVec2 HadamardProduct(const ImVec2& a, const ImVec2& b)
 {
     return { a.x * b.x, a.y * b.y };
+}
+
+bool FindNumberInVector(const std::vector<s32>& data, const s32 val)
+{
+    for (s32 i = 0; i < data.size(); i++)
+    {
+        if (data[i] == val)
+            return true;
+    }
+    return false;
+}
+
+void RemoveNumberInVector(std::vector<s32>& data, const s32 val)
+{
+    std::erase_if(data,
+        [val](s32 a)
+        {
+            return a == val;
+        });
 }
 
 void TextCentered(std::string text) 
@@ -71,8 +84,16 @@ int DynamicTextCallback(ImGuiInputTextCallbackData* data)
             return 1;
         std::string* string = (std::string*)data->UserData;
         //assert((char*)string->data() == (char*)data->Buf);
-        string->resize(data->BufSize);
-        data->Buf = string->data();
+#if 1
+            string->resize(data->BufTextLen);
+            data->Buf = string->data();
+#else
+        if (data->BufSize < data->BufTextLen)
+        {
+            string->resize(data->BufSize);
+            data->Buf = string->data();
+        }
+#endif
     }
     return 0;
 }
@@ -88,7 +109,7 @@ bool InputTextMultilineDynamicSize(const std::string& title, std::string& s, ImG
 }
 
 
-void NameStatusButtonAdd(const std::string& buttonName, std::string& text, std::vector<NameStatus>& data, int codeLine)
+bool NameStatusButtonAdd(const std::string& buttonName, std::string& text, int codeLine)
 {
     ImGui::SameLine();
     std::string id = "##" + std::to_string(codeLine);
@@ -115,13 +136,7 @@ void NameStatusButtonAdd(const std::string& buttonName, std::string& text, std::
     InputTextDynamicSize(id, text);
     ImGui::SameLine();
     std::string fullButtonName = "Add " + buttonName;
-    if (ImGui::Button(fullButtonName.c_str()) && text.size())
-    {
-        NameStatus ns = {};
-        ns.name = text;
-        data.push_back(ns);
-        text.clear();
-    }
+    return ImGui::Button(fullButtonName.c_str()) && text.size();
 }
 
 void RemoveStartAndEndSpaces(std::string& s)
@@ -136,7 +151,7 @@ void RemoveStartAndEndSpaces(std::string& s)
     }
 }
 
-void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& data, std::string& inputString, int selectedIndex)
+void ExecutionSection(const std::string& sectionTitle, std::vector<std::string>& names, std::vector<s32>& enables, std::string& inputString, int selectedIndex)
 {
     std::string sectionTitleEvents = sectionTitle + " Events:";
     ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
@@ -151,10 +166,10 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
         if (inputSuccess)
         {
             RemoveStartAndEndSpaces(inputString);
-            data.push_back({ inputString });
+            names.push_back({ inputString });
             inputString.clear();
         }
-        if (data.size() == 0)
+        if (names.size() == 0)
             return;
 
 
@@ -174,18 +189,18 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
         //capping the height at 5 so you can see the top row while scrolling horizontally
         //TODO: change the max height to varry with the size of the child window
         const int maxTableHeight = 5;
-        ImVec2 tableSize = ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * (Min(maxTableHeight, (int)data.size()) + 1)); 
+        ImVec2 tableSize = ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * (Min(maxTableHeight, (int)names.size()) + 1)); 
         const int tableColumnCount = 2;
         if (ImGui::BeginTable("table_advanced", tableColumnCount, tableFlags, tableSize, 0.0f))
         {
             DEFER{ ImGui::EndTable(); };
 
             const ImGuiTableColumnFlags columnFlags = ImGuiTableColumnFlags_WidthFixed;
-            assert(data.size());
+            assert(names.size());
             float longestText = 0;
-            for (const auto& item : data)
+            for (const auto& item : names)
             {
-                ImVec2 textSize = ImGui::CalcTextSize(item.name.c_str());
+                ImVec2 textSize = ImGui::CalcTextSize(item.c_str());
                 longestText = Max(longestText, textSize.x);
             }
             ImGui::TableSetupScrollFreeze(1, 0);
@@ -195,11 +210,11 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
             //ImGui::PushButtonRepeat(true);
             //DEFER{ ImGui::PopButtonRepeat(); };
             {
-                for (int row_n = 0; row_n < data.size(); row_n++)
+                for (int row_n = 0; row_n < names.size(); row_n++)
                 {
-                    auto item = data[row_n];
+                    auto item = names[row_n];
 
-                    ImGui::PushID(item.name.c_str());
+                    ImGui::PushID(item.c_str());
                     DEFER{ ImGui::PopID(); };
 
                     ImGui::TableNextRow(ImGuiTableRowFlags_None, 0);
@@ -207,7 +222,8 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
                     {
                         std::string buttonLabel = "Disabled";
                         float color = 0.0f;
-                        if (data[row_n].enabled)
+                        const bool enabled = FindNumberInVector(enables, row_n);
+                        if (enabled)
                         {
                             color = 2.0f / 7.0f;
                             buttonLabel = "Enabled";
@@ -218,7 +234,10 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
                         ImGui::PushStyleColor(ImGuiCol_ButtonActive,    (ImVec4)ImColor::HSV(color, 0.8f, 0.8f));
                         if (ImGui::SmallButton(buttonLabel.c_str()))
                         {
-                            data[row_n].enabled = !data[row_n].enabled;
+                            if (enabled)
+                                RemoveNumberInVector(enables, row_n);
+                            else
+                                enables.push_back(row_n);
                         }
                         ImGui::PopStyleColor(3);
                     }
@@ -226,33 +245,20 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<NameStatus>& 
 
                     ImGui::TableSetColumnIndex(1);
                     ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
-                    ImGui::Selectable(item.name.c_str(), false, selectable_flags, ImVec2(0, 0));
+                    ImGui::Selectable(item.c_str(), false, selectable_flags, ImVec2(0, 0));
                     if (ImGui::IsItemActive() && !ImGui::IsItemHovered())
                     {
                         int nextIndex = row_n + (ImGui::GetMouseDragDelta(0).y < 0.f ? -1 : 1);
-                        if (nextIndex >= 0 && nextIndex < data.size())
+                        if (nextIndex >= 0 && nextIndex < names.size())
                         {
-                            data[row_n] = data[nextIndex];
-                            data[nextIndex] = item;
+                            names[row_n] = names[nextIndex];
+                            names[nextIndex] = item;
                             ImGui::ResetMouseDragDelta();
                         }
                     }
                 }
             }
         }
-    }
-}
-
-void HelpMarker(const std::string& desc)
-{
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
-        ImGui::TextUnformatted(desc.c_str());
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
     }
 }
 
@@ -280,6 +286,46 @@ bool SeperatePathAndArguments(const std::string& input, std::string& path, std::
 
     args = input.substr(maxValue,   input.size() - (maxValue));
     return true;
+}
+
+void RunProcessList(const std::vector<std::string>& names, const std::vector<s32>& enabledInts, Threading& thread)
+{
+    for (s32 i = 0; i < names.size(); i++)
+    {
+        std::string path;
+        std::string args;
+        SeperatePathAndArguments(names[i], path, args);
+        RemoveStartAndEndSpaces(path);
+        if (args.size())
+            RemoveStartAndEndSpaces(args);
+        StartProcessJob* job = new StartProcessJob();
+        job->applicationPath = path;
+        job->arguments = args;
+        thread.SubmitJob(job);
+    }
+}
+
+void CleanPathString(std::string& s)
+{
+    size_t pos = s.find('\\');
+    while (pos != std::string::npos)
+    {
+        s.replace(pos, 1, "/", 1);
+        pos = s.find('\\');
+    }
+}
+
+void HelpMarker(const std::string& desc)
+{
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
 }
 
 
@@ -369,43 +415,15 @@ int main(int, char**)
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init(glsl_version);
     
-    std::string mainPath;
-    std::string projectPath;
+    Settings settings;
+    if (!LoadConfig(settings))
+    {
+        LoadDefaults(settings);
+    }
 
-    int platformSelection = 0;
-    std::vector<NameStatus> platformOptions;
-    platformOptions.push_back({ "Win64" });
-    platformOptions.push_back({ "XboxOne" });
-    platformOptions.push_back({ "XboxOneGDK" });
-    platformOptions.push_back({ "XSX" });
-    platformOptions.push_back({ "PS4" });
-    platformOptions.push_back({ "PS5" });
-
-    std::vector<NameStatus> versionOptions;
-    versionOptions.push_back({ "Shipping" });
-    versionOptions.push_back({ "Test" });
-    versionOptions.push_back({ "Development" });
-    versionOptions.push_back({ "Debug" });
-
-    std::vector<NameStatus> switchOptions;
-    switchOptions.push_back({ "AdditionalCookerOptions=\"-ddc=noshared\"" });
-    switchOptions.push_back({ "AdditionalCookerOptions=\"-ddc=ddcreadonly\"" });
-    switchOptions.push_back({ "distribution" });
-    switchOptions.push_back({ "MapIniSectionsToCook=DevCookMaps" });
-    switchOptions.push_back({ "cook" });
-    switchOptions.push_back({ "NoP4" });
-    switchOptions.push_back({ "manifests" });
-    switchOptions.push_back({ "pak" });
-    switchOptions.push_back({ "build" });
-    switchOptions.push_back({ "stage" });
-    switchOptions.push_back({ "compress" });
-    switchOptions.push_back({ "dedicatedserver" });
-    switchOptions.push_back({ "package" });
-    switchOptions.push_back({ "skipcook" });
-    switchOptions.push_back({ "skipbuild" });
-
-    std::vector<NameStatus> preBuildEvents;
-    std::vector<NameStatus> postBuildEvents;
+    //SaveConfig(settings);
+    //return 0;
+    std::string versionInputName;
 
 
     std::string finalCommandLine;
@@ -501,14 +519,16 @@ int main(int, char**)
                 ImGui::Text("Main Dir");
                 ImGui::SameLine();
                 std::string demoMainDir = "C:/UnrealEngine/Project";
-                InputTextDynamicSize("##" + demoMainDir, mainPath);
+                InputTextDynamicSize("##" + demoMainDir, settings.rootPath);
+                CleanPathString(settings.rootPath);
                 ImGui::SameLine();
                 HelpMarker(demoMainDir);
 
                 ImGui::Text("Path to Project File");
                 ImGui::SameLine();
                 std::string demoProjectPath = "C:/UnrealEngine/Project/Title/title.uproject";
-                InputTextDynamicSize("##" + demoProjectPath, projectPath);
+                InputTextDynamicSize("##" + demoProjectPath, settings.projectPath);
+                CleanPathString(settings.projectPath);
                 ImGui::SameLine();
                 HelpMarker(demoProjectPath);
             }
@@ -524,17 +544,21 @@ int main(int, char**)
                     float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
                     float last_button_x2 = 0;
                     ImGuiStyle& style = ImGui::GetStyle();
-                    for (int i = 0; i < platformOptions.size(); i++)
+                    for (int i = 0; i < settings.platformOptions.size(); i++)
                     {
-                        float button_szx = ImGui::CalcTextSize(platformOptions[i].name.c_str()).x + 2 * style.FramePadding.x;
+                        float button_szx = ImGui::CalcTextSize(settings.platformOptions[i].name.c_str()).x + 2 * style.FramePadding.x;
                         float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
                         if (next_button_x2 < window_visible_x2)
                             ImGui::SameLine(0, 1);
-                        ImGui::RadioButton(platformOptions[i].name.c_str(), &platformSelection, i);
+                        ImGui::RadioButton(settings.platformOptions[i].name.c_str(), &settings.platformSelection, i);
                         last_button_x2 = ImGui::GetItemRectMax().x;
                     }
                     static std::string name;
-                    NameStatusButtonAdd("Platform", name, platformOptions, __LINE__);
+                    if (NameStatusButtonAdd("Platform", name, __LINE__))
+                    {
+                        settings.platformOptions.push_back({name});
+                        name.clear();
+                    }
                 }
 
                 {
@@ -544,17 +568,30 @@ int main(int, char**)
                     float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
                     float last_button_x2 = 0;
                     ImGuiStyle& style = ImGui::GetStyle();
-                    for (int i = 0; i < versionOptions.size(); i++)
+                    for (int i = 0; i < settings.versionOptions.size(); i++)
                     {
-                        float button_szx = ImGui::CalcTextSize(versionOptions[i].name.c_str()).x + 2 * style.FramePadding.x;
+                        float button_szx = ImGui::CalcTextSize(settings.versionOptions[i].c_str()).x + 2 * style.FramePadding.x;
                         float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
                         if (next_button_x2 < window_visible_x2)
                             ImGui::SameLine(0, 1);
-                        ImGui::Checkbox(versionOptions[i].name.c_str(), &versionOptions[i].enabled);
+                        bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
+                        bool checkbox = found;
+                        ImGui::Checkbox(settings.versionOptions[i].c_str(), &checkbox);
+                        if (checkbox != found)
+                        {
+                            if (found)
+                                RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
+                            else
+                                settings.platformOptions[settings.platformSelection].enabledVersions.push_back(i);
+                        }
                         last_button_x2 = ImGui::GetItemRectMax().x;
                     }
-                    static std::string name;
-                    NameStatusButtonAdd("Version", name, versionOptions, __LINE__);
+                    //std::string versionInputName;
+                    if (NameStatusButtonAdd("Version", versionInputName, __LINE__))
+                    {
+                        settings.versionOptions.push_back({versionInputName});
+                        versionInputName.clear();
+                    }
                 }
 
                 //ImGui::Text("Platform Selection");
@@ -571,17 +608,30 @@ int main(int, char**)
                 float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
                 float last_button_x2 = 0;
                 ImGuiStyle& style = ImGui::GetStyle();
-                for (int i = 0; i < switchOptions.size(); i++)
+                for (int i = 0; i < settings.switchOptions.size(); i++)
                 {
-                    float button_szx = ImGui::CalcTextSize(switchOptions[i].name.c_str()).x + 2 * style.FramePadding.x;
+                    float button_szx = ImGui::CalcTextSize(settings.switchOptions[i].c_str()).x + 2 * style.FramePadding.x;
                     float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
                     if (next_button_x2 < window_visible_x2)
                         ImGui::SameLine(0, 1);
-                    ImGui::Checkbox(switchOptions[i].name.c_str(), &switchOptions[i].enabled);
+                    bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
+                    bool checkbox = found;
+                    ImGui::Checkbox(settings.switchOptions[i].c_str(), &checkbox);
+                    if (checkbox != found)
+                    {
+                        if (found)
+                            RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
+                        else
+                            settings.platformOptions[settings.platformSelection].enabledSwitches.push_back(i);
+                    }
                     last_button_x2 = ImGui::GetItemRectMax().x;
                 }
                 static std::string name;
-                NameStatusButtonAdd("Switch", name, switchOptions, __LINE__);
+                if (NameStatusButtonAdd("Switch", name, __LINE__))
+                {
+                    settings.switchOptions.push_back({ name });
+                    name.clear();
+                }
             }
             ImGui::EndChild();
 
@@ -594,15 +644,15 @@ int main(int, char**)
 
                 static std::string preBuildInput;
                 static int preBuildSelectionIndex = -1;
-                ExecutionSection("Pre-Build", preBuildEvents, preBuildInput, preBuildSelectionIndex);
+                ExecutionSection("Pre-Build", settings.preBuildEvents, settings.platformOptions[settings.platformSelection].enabledPreBuild, preBuildInput, preBuildSelectionIndex);
 
                 static std::string postBuildInput;
                 static int postBuildSelectionIndex = -1;
-                ExecutionSection("Post-Build", postBuildEvents, postBuildInput, postBuildSelectionIndex);
+                ExecutionSection("Post-Build", settings.postBuildEvents, settings.platformOptions[settings.platformSelection].enabledPostBuild, postBuildInput, postBuildSelectionIndex);
             }
             ImGui::EndChild();
 
-            bool commandLineInvalid = projectPath.size() < 3;
+            bool commandLineInvalid = settings.projectPath.size() < 3;
             ImVec2 commandScale = { 0.7f, 0.2f };
             ImVec2 commandSize = HadamardProduct(viewport->WorkSize, commandScale);
             ImGui::SetNextWindowPos(ImVec2((((1 - commandScale.x) / 2) * viewport->WorkSize.x), locationSize.y + platformSize.y + switchesSize.y + executionSize.y), 0, ImVec2(0.0f, 0.0f));
@@ -617,34 +667,28 @@ int main(int, char**)
                 }
                 else
                 {
-                    finalCommandLine += mainPath.c_str();
+                    finalCommandLine += settings.rootPath.c_str();
                     finalCommandLine += "/Engine/Build/BatchFiles/RunUAT.bat BuildCookRun ";
                     finalCommandLine += "-project=";
-                    finalCommandLine += projectPath.c_str();
+                    finalCommandLine += settings.projectPath.c_str();
                     finalCommandLine += " -targetplatform=";
-                    finalCommandLine += platformOptions[platformSelection].name;
+                    finalCommandLine += settings.platformOptions[settings.platformSelection].name;
                     finalCommandLine += " -clientconfig=";
                     bool alreadyOneEnabled = false;
-                    for (const auto& option : versionOptions)
+                    for (const auto& optionIndex : settings.platformOptions[settings.platformSelection].enabledVersions)
                     {
-                        if (option.enabled)
-                        {
-                            if (alreadyOneEnabled)
-                                finalCommandLine += "+";
-                            finalCommandLine += option.name;
-                            alreadyOneEnabled = true;
-                        }
+                        if (alreadyOneEnabled)
+                            finalCommandLine += "+";
+                        finalCommandLine += settings.versionOptions[optionIndex];
+                        alreadyOneEnabled = true;
                     }
                     finalCommandLine += " -servertargetplatform=win64";
                     finalCommandLine += " -serverconfig=Development";
 
-                    for (const auto& option : switchOptions)
+                    for (const auto& optionIndex : settings.platformOptions[settings.platformSelection].enabledSwitches)
                     {
-                        if (option.enabled)
-                        {
-                            finalCommandLine += " -";
-                            finalCommandLine += option.name;
-                        }
+                        finalCommandLine += " -";
+                        finalCommandLine += settings.switchOptions[optionIndex];
                     }
                 }
 
@@ -659,40 +703,36 @@ int main(int, char**)
                     ImGui::BeginDisabled();
                 if (ImGui::Button("RUN"))
                 {
-                    s32 enabledPreBuildEventsCount = 0;
-                    for (s32 i = 0; i < preBuildEvents.size(); i++)
                     {
-                        if (preBuildEvents[i].enabled)
+                        const std::vector<s32>& enabledInts = settings.platformOptions[settings.platformSelection].enabledPreBuild;
+                        for (s32 i = 0; i < enabledInts.size(); i++)
                         {
-                            std::string path;
-                            std::string args;
-                            SeperatePathAndArguments(preBuildEvents[i].name, path, args);
-                            RemoveStartAndEndSpaces(path);
-                            if (args.size())
-                                RemoveStartAndEndSpaces(args);
-                            enabledPreBuildEventsCount++;
-                            StartProcessJob* job = new StartProcessJob();
-                            job->applicationPath = path;
-                            job->arguments = args;
-                            threading.SubmitJob(job);
+                            RunProcessList(settings.preBuildEvents, enabledInts, threading);
                         }
                     }
-                    s32 enabledPostBuildEventsCount = 0;
-                    for (s32 i = 0; i < postBuildEvents.size(); i++)
+                    //RUN THE ACTUAL COMMAND LINE HERE
                     {
-                        if (postBuildEvents[i].enabled)
-                            enabledPostBuildEventsCount++;
+                        const std::vector<s32>& enabledInts = settings.platformOptions[settings.platformSelection].enabledPostBuild;
+                        for (s32 i = 0; i < enabledInts.size(); i++)
+                        {
+                            RunProcessList(settings.postBuildEvents, enabledInts, threading);
+                        }
                     }
                 }
                 if (buildRunning || commandLineInvalid)
                     ImGui::EndDisabled();
                 ImGui::SameLine();
-                ImGui::BeginDisabled();
+                //ImGui::BeginDisabled();
                 if (ImGui::Button("Save Config"))
                 {
-
+                    SaveConfig(settings);
                 }
-                ImGui::EndDisabled();
+                ImGui::SameLine();
+                if (ImGui::Button("Load Config"))
+                {
+                    LoadConfig(settings);
+                }
+                //ImGui::EndDisabled();
                 ImGui::SameLine();
                 ImGui::BeginDisabled();
                 if (ImGui::Button("Export"))

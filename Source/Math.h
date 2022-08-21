@@ -49,3 +49,61 @@ template <typename T>
 {
     return Max(min, Min(max, v));
 }
+static void Swap(void* a, void* b, const s32 size);
+static s32 Partition(u8* array, const s32 itemSize, s32 iBegin, s32 iEnd, s32(*compare)(const void*, const void*), s32* comparisons);
+static void QuickSortInternal(u8* array, const s32 itemSize, s32 iBegin, s32 iEnd, s32(*compare)(const void*, const void*), s32* comparisons);
+static s32 QuickSort(u8* data, const s32 arrayCount, const s32 itemSize, s32(*compare)(const void* a, const void* b));
+
+void Swap(void* a, void* b, const s32 size)
+{
+    u8* c = (u8*)a;
+    u8* d = (u8*)b;
+    for (s32 i = 0; i < size; i++)
+    {
+
+		u8 temp = c[i];
+		c[i] = d[i];
+		d[i] = temp;
+    }
+}
+
+s32 Partition(u8* array, const s32 itemSize, s32 iBegin, s32 iEnd, s32 (*compare)(const void*, const void*), s32* comparisons)
+{
+    assert(array != nullptr);
+    u8* pivot = &array[iEnd * itemSize];
+    assert(pivot != nullptr);
+    s32 lowOffset = iBegin;
+
+	for (s32 i = iBegin; i < iEnd; i++)
+	{
+        (*comparisons)++;
+		if (compare(&array[i * itemSize], pivot) > 0)
+		{
+
+			Swap(&array[lowOffset * itemSize], &array[i * itemSize], itemSize);
+			lowOffset++;
+		}
+	}
+
+    Swap(&array[lowOffset * itemSize], &array[iEnd * itemSize], itemSize);
+    return lowOffset;
+}
+
+void QuickSortInternal(u8* array, const s32 itemSize, s32 iBegin, s32 iEnd, s32 (*compare)(const void*, const void*), s32* comparisons)
+{
+    (*comparisons)++;
+	if (iBegin < iEnd)
+	{
+        s32 pivotIndex = Partition(array, itemSize, iBegin, iEnd, compare, comparisons);
+		QuickSortInternal(array, itemSize, iBegin, pivotIndex - 1, compare, comparisons); //Low Sort
+		QuickSortInternal(array, itemSize, pivotIndex + 1, iEnd, compare, comparisons); //High Sort
+	}
+}
+
+//Returns the amount of values compared (comparison count)
+s32 QuickSort(u8* data, const s32 arrayCount, const s32 itemSize, s32 (*compare)(const void* a, const void* b))
+{
+    s32 comparisons = 0;
+    QuickSortInternal(data, itemSize, 0, arrayCount - 1, compare, &comparisons);
+    return comparisons;
+}
