@@ -208,7 +208,6 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<std::string>&
             ImGui::TableSetupColumn("String",   columnFlags, longestText);
 
             //ImGui::PushButtonRepeat(true);
-            //DEFER{ ImGui::PopButtonRepeat(); };
             {
                 for (int row_n = 0; row_n < names.size(); row_n++)
                 {
@@ -288,20 +287,25 @@ bool SeperatePathAndArguments(const std::string& input, std::string& path, std::
     return true;
 }
 
+void RunProcess(const std::string& name, Threading& thread)
+{
+    std::string path;
+    std::string args;
+    SeperatePathAndArguments(name, path, args);
+    RemoveStartAndEndSpaces(path);
+    if (args.size())
+        RemoveStartAndEndSpaces(args);
+    StartProcessJob* job = new StartProcessJob();
+    job->applicationPath = path;
+    job->arguments = args;
+    thread.SubmitJob(job);
+}
+
 void RunProcessList(const std::vector<std::string>& names, const std::vector<s32>& enabledInts, Threading& thread)
 {
-    for (s32 i = 0; i < names.size(); i++)
+    for (s32 i = 0; i < enabledInts.size(); i++)
     {
-        std::string path;
-        std::string args;
-        SeperatePathAndArguments(names[i], path, args);
-        RemoveStartAndEndSpaces(path);
-        if (args.size())
-            RemoveStartAndEndSpaces(args);
-        StartProcessJob* job = new StartProcessJob();
-        job->applicationPath = path;
-        job->arguments = args;
-        thread.SubmitJob(job);
+        RunProcess(names[enabledInts[i]], thread);
     }
 }
 
@@ -394,7 +398,7 @@ int main(int, char**)
     }
 
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    SDL_Window* window = SDL_CreateWindow("Dear ImGui SDL2+OpenGL3 example", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
+    SDL_Window* window = SDL_CreateWindow("UATHelper", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
     SDL_GLContext gl_context = SDL_GL_CreateContext(window);
     SDL_GL_MakeCurrent(window, gl_context);
     SDL_GL_SetSwapInterval(1); // Enable vsync
@@ -414,6 +418,7 @@ int main(int, char**)
     // Setup Platform/Renderer backends
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init(glsl_version);
+    InitOS(window);
     
     Settings settings;
     if (!LoadConfig(settings))
@@ -423,11 +428,9 @@ int main(int, char**)
 
     //SaveConfig(settings);
     //return 0;
-    std::string versionInputName;
-
-
     std::string finalCommandLine;
     bool buildRunning = false;
+    bool rebuildCommandline = true;
 
     //ImFont* mainFont = io.Fonts->AddFontFromFileTTF("Assets/DroidSans.ttf", 16);
     //io.Fonts->Build();
@@ -478,7 +481,7 @@ int main(int, char**)
         if (!threading.GetJobsInFlight())
             buildRunning = false;
 
-
+        
         const ImGuiViewport* viewport = ImGui::GetMainViewport();
         ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always, {});
         ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
@@ -504,7 +507,8 @@ int main(int, char**)
                 ImGuiWindowFlags_NoNav | 
                 ImGuiWindowFlags_NoMove;
 
-            ImVec2 locationScale = { 0.7f, 0.1f };
+            f32 xScale = 1.0f;
+            ImVec2 locationScale = { xScale, 0.1f };
             ImVec2 locationSize = HadamardProduct(viewport->WorkSize, locationScale);
             ImGui::SetNextWindowPos(ImVec2((((1 - locationScale.x) / 2) * viewport->WorkSize.x), locationSize.y), 0, ImVec2(0.0f, 1.0f));
             if (ImGui::BeginChild("Location", locationSize, true, sectionFlags | ImGuiWindowFlags_NoScrollbar))
@@ -533,7 +537,7 @@ int main(int, char**)
                 HelpMarker(demoProjectPath);
             }
             ImGui::EndChild();
-            ImVec2 platformScale = { 0.7f, 0.2f };
+            ImVec2 platformScale = { xScale, 0.2f };
             ImVec2 platformSize = HadamardProduct(viewport->WorkSize, platformScale);
             ImGui::SetNextWindowPos(ImVec2((((1 - platformScale.x) / 2) * viewport->WorkSize.x), locationSize.y), 0, ImVec2(0.0f, 0.0f));
             if (ImGui::BeginChild("Platform", platformSize, true, sectionFlags))
@@ -586,7 +590,8 @@ int main(int, char**)
                         }
                         last_button_x2 = ImGui::GetItemRectMax().x;
                     }
-                    //std::string versionInputName;
+
+                    static std::string versionInputName;
                     if (NameStatusButtonAdd("Version", versionInputName, __LINE__))
                     {
                         settings.versionOptions.push_back({versionInputName});
@@ -598,7 +603,7 @@ int main(int, char**)
             }
             ImGui::EndChild();
 
-            ImVec2 switchesScale = { 0.7f, 0.2f };
+            ImVec2 switchesScale = { xScale, 0.2f };
             ImVec2 switchesSize = HadamardProduct(viewport->WorkSize, switchesScale);
             ImGui::SetNextWindowPos(ImVec2((((1 - switchesScale.x) / 2) * viewport->WorkSize.x), locationSize.y + platformSize.y), 0, ImVec2(0.0f, 0.0f));
             if (ImGui::BeginChild("Switches", switchesSize, true, sectionFlags))
@@ -635,7 +640,7 @@ int main(int, char**)
             }
             ImGui::EndChild();
 
-            ImVec2 executionScale = { 0.7f, 0.3f };
+            ImVec2 executionScale = { xScale, 0.3f };
             ImVec2 executionSize = HadamardProduct(viewport->WorkSize, executionScale);
             ImGui::SetNextWindowPos(ImVec2((((1 - executionScale.x) / 2) * viewport->WorkSize.x), locationSize.y + platformSize.y + switchesSize.y), 0, ImVec2(0, 0.0f));
             if (ImGui::BeginChild("Execution", executionSize, true, sectionFlags))
@@ -653,7 +658,7 @@ int main(int, char**)
             ImGui::EndChild();
 
             bool commandLineInvalid = settings.projectPath.size() < 3;
-            ImVec2 commandScale = { 0.7f, 0.2f };
+            ImVec2 commandScale = { xScale, 0.2f };
             ImVec2 commandSize = HadamardProduct(viewport->WorkSize, commandScale);
             ImGui::SetNextWindowPos(ImVec2((((1 - commandScale.x) / 2) * viewport->WorkSize.x), locationSize.y + platformSize.y + switchesSize.y + executionSize.y), 0, ImVec2(0.0f, 0.0f));
             if (ImGui::BeginChild("Command Line", commandSize, true, sectionFlags))
@@ -703,26 +708,19 @@ int main(int, char**)
                     ImGui::BeginDisabled();
                 if (ImGui::Button("RUN"))
                 {
-                    {
-                        const std::vector<s32>& enabledInts = settings.platformOptions[settings.platformSelection].enabledPreBuild;
-                        for (s32 i = 0; i < enabledInts.size(); i++)
-                        {
-                            RunProcessList(settings.preBuildEvents, enabledInts, threading);
-                        }
-                    }
-                    //RUN THE ACTUAL COMMAND LINE HERE
-                    {
-                        const std::vector<s32>& enabledInts = settings.platformOptions[settings.platformSelection].enabledPostBuild;
-                        for (s32 i = 0; i < enabledInts.size(); i++)
-                        {
-                            RunProcessList(settings.postBuildEvents, enabledInts, threading);
-                        }
-                    }
+                    RunProcessList(settings.preBuildEvents,
+                        settings.platformOptions[settings.platformSelection].enabledPreBuild,
+                        threading);
+#if NDEBUG
+                    RunProcess(finalCommandLine, threading);
+#endif
+                    RunProcessList(settings.postBuildEvents,
+                        settings.platformOptions[settings.platformSelection].enabledPostBuild,
+                        threading);
                 }
                 if (buildRunning || commandLineInvalid)
                     ImGui::EndDisabled();
                 ImGui::SameLine();
-                //ImGui::BeginDisabled();
                 if (ImGui::Button("Save Config"))
                 {
                     SaveConfig(settings);
@@ -732,14 +730,7 @@ int main(int, char**)
                 {
                     LoadConfig(settings);
                 }
-                //ImGui::EndDisabled();
-                ImGui::SameLine();
-                ImGui::BeginDisabled();
-                if (ImGui::Button("Export"))
-                {
-
-                }
-                ImGui::EndDisabled();
+                ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             }
             ImGui::EndChild();
             ImGui::End();
@@ -747,6 +738,7 @@ int main(int, char**)
 
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
+
 
         // Rendering
         //ImGui::PopFont();

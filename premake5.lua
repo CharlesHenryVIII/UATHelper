@@ -38,10 +38,11 @@ project "UATHelper"
        "_CRT_SECURE_NO_WARNINGS",
    }
    files {
-       "Source/*.h",
-       "Source/*.c",
-       "Source/*.cpp",
-       "Source/*.hpp",
+       "Source/**",
+       --"Source/**.h",
+       --"Source/**.c",
+       --"Source/**.cpp",
+       --"Source/**.hpp",
        "Contrib/imgui/*.cpp",
        "Contrib/imgui/*.h",
        "Contrib/imgui/backends/imgui_impl_opengl3.cpp",

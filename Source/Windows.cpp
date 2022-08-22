@@ -1,9 +1,12 @@
 #include "Windows.h"
 #include "Math.h"
+#include "Windows/resource.h"
+
+#include "SDL_syswm.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
-#include "SDL.h"
+#include <shellapi.h>
 
 std::string ToString(const char* fmt, ...)
 {
@@ -69,4 +72,35 @@ void StartProcessJob::RunJob()
         RunProcess(applicationPath.c_str(), arguments.c_str());
     else
         RunProcess(applicationPath.c_str(), nullptr);
+}
+
+HICON icon;
+HMODULE instMod;
+
+void InitOS(SDL_Window* window)
+{
+    instMod = GetModuleHandle(NULL);
+    if (instMod == NULL)
+    {
+        DWORD err = GetLastError();
+        ShowErrorWindow("Error GetModuleHandle()", ToString("GetModuleHandle() Returned: %i", err));
+        return;
+    }
+    SDL_SysWMinfo wminfo;
+    SDL_VERSION(&wminfo.version);
+    if (!SDL_GetWindowWMInfo(window, &wminfo))
+    {
+        const char* err = SDL_GetError();
+        ShowErrorWindow("Error SDL_GetWindowWMInfo()", ToString("SDL_GetWindowWMInfo() Returned: %s", err));
+        return;
+    }
+    HWND hwnd = wminfo.info.win.window;
+
+    icon = LoadIcon(instMod, MAKEINTRESOURCE(IDI_ICON1));
+    if (icon == NULL)
+    {
+        DWORD err = GetLastError();
+        ShowErrorWindow("Error LoadIcon()", ToString("LoadIcon() Returned: %i", err));
+        return;
+    }
 }
