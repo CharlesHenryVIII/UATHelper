@@ -18,11 +18,6 @@ std::string ToString(const char* fmt, ...)
     return buffer;
 }
 
-int ShowErrorWindow(const std::string& title, const std::string& text)
-{
-    return SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title.c_str(), text.c_str(), NULL);
-}
-
 void RunProcess(const char* applicationPath, const char* arguments)
 {
     LPSTR lpApplicationPath = const_cast<char*>(applicationPath);
@@ -80,27 +75,66 @@ HMODULE instMod;
 void InitOS(SDL_Window* window)
 {
     instMod = GetModuleHandle(NULL);
-    if (instMod == NULL)
-    {
-        DWORD err = GetLastError();
-        ShowErrorWindow("Error GetModuleHandle()", ToString("GetModuleHandle() Returned: %i", err));
-        return;
-    }
+    assert(instMod != NULL);
     SDL_SysWMinfo wminfo;
     SDL_VERSION(&wminfo.version);
-    if (!SDL_GetWindowWMInfo(window, &wminfo))
-    {
-        const char* err = SDL_GetError();
-        ShowErrorWindow("Error SDL_GetWindowWMInfo()", ToString("SDL_GetWindowWMInfo() Returned: %s", err));
-        return;
-    }
+    assert(SDL_GetWindowWMInfo(window, &wminfo));
     HWND hwnd = wminfo.info.win.window;
-
     icon = LoadIcon(instMod, MAKEINTRESOURCE(IDI_ICON1));
-    if (icon == NULL)
+    assert(icon != NULL);
+}
+
+
+void ShowErrorWindow(const std::string& title, const std::string& text)
+{
+#if 1
+    int msgboxID = MessageBox(
+        NULL,
+        text.c_str(),
+        title.c_str(),
+        MB_ABORTRETRYIGNORE | MB_ICONSTOP | MB_DEFBUTTON1 | MB_APPLMODAL
+    );
+
+    switch (msgboxID)
     {
-        DWORD err = GetLastError();
-        ShowErrorWindow("Error LoadIcon()", ToString("LoadIcon() Returned: %i", err));
-        return;
+    case IDABORT:
+        SDL_Event e;
+        e.type = SDL_QUIT;
+        e.quit.timestamp = 0;
+        SDL_PushEvent(&e);
+        break;
+    case IDRETRY:
+        break;
+    case IDIGNORE:
+        break;
     }
+#else
+    ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoSavedSettings;
+    const ImVec2 min = { 260, 100 };
+    const ImVec2 windowSize = ImGui::GetMainViewport()->WorkSize;
+    const ImVec2 max = {windowSize.x - 200, windowSize.y - 200};
+    ImGui::SetNextWindowSizeConstraints(min, max);
+    ImGui::SetNextWindowPos(ImVec2(windowSize.x / 2, windowSize.y / 2), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::OpenPopup(title.c_str());
+    if (ImGui::BeginPopupModal(title.c_str(), NULL, flags))
+    {
+        ImGui::TextWrapped(text.c_str());
+        if (ImGui::Button("Continue"))
+            ImGui::CloseCurrentPopup();
+        ImGui::SameLine();
+        if (ImGui::Button("Copy to Clipboard"))
+            SDL_SetClipboardText(text.c_str());
+        ImGui::SameLine();
+        if (ImGui::Button("Exit"))
+        {
+            SDL_Event e;
+            e.type = SDL_QUIT;
+            e.quit.timestamp = 0;
+            SDL_PushEvent(&e);
+        }
+        ImGui::EndPopup();
+    }
+#endif
 }

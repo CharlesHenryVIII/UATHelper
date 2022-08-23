@@ -332,6 +332,16 @@ void HelpMarker(const std::string& desc)
     }
 }
 
+bool GetCStringFromPlatformSettings(void* data, int idx, const char** out_text)
+{
+    if (!data)
+        return false;
+    const std::vector<PlatformSettings>& d = *(std::vector<PlatformSettings>*)data;
+    if (idx >= d.size())
+        return false;
+    *out_text = d[idx].name.c_str();
+    return true;
+}
 
 
 
@@ -543,6 +553,19 @@ int main(int, char**)
             if (ImGui::BeginChild("Platform", platformSize, true, sectionFlags))
             {
                 {
+#if 1
+                    ImGui::Text("Platform Selection");
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(150);
+                    ImGui::Combo("##Platform Selection", &settings.platformSelection, GetCStringFromPlatformSettings, 
+                                &settings.platformOptions, (s32)settings.platformOptions.size());
+                    static std::string name;
+                    if (NameStatusButtonAdd("Platform", name, __LINE__))
+                    {
+                        settings.platformOptions.push_back({name});
+                        name.clear();
+                    }
+#else
                     TextCentered("Platform Selection");
                     ImGui::NewLine();
                     float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
@@ -563,6 +586,7 @@ int main(int, char**)
                         settings.platformOptions.push_back({name});
                         name.clear();
                     }
+#endif
                 }
 
                 {
@@ -738,7 +762,6 @@ int main(int, char**)
 
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);
-
 
         // Rendering
         //ImGui::PopFont();
