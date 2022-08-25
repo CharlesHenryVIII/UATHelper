@@ -8,6 +8,8 @@
 
 const char* configFileName          = "UATHelperConfig.json";
 const char* platformSelectionText   = "Platform Selection";
+const char* colorSelectionText      = "Color Selection";
+const char* styleSelectionText      = "Style Selection";
 const char* rootPathText            = "Root Path";
 const char* projectPathText         = "Project Path";
 const char* versionOptionsText      = "Version Options";
@@ -64,14 +66,16 @@ void SaveConfig(Settings& settings)
     SortConfig(settings);
     nlohmann::json j;
 
-    j[versionText]          = currentVersion;
-    j[platformSelectionText] = settings.platformSelection;
-    j[rootPathText]          = settings.rootPath;
-    j[projectPathText]       = settings.projectPath;
-    j[versionOptionsText]    = settings.versionOptions;
-    j[switchOptionsText]     = settings.switchOptions;
-    j[preBuildEventsText]   = settings.preBuildEvents;
-    j[postBuildEventsText]  = settings.postBuildEvents;
+    j[versionText]              = currentVersion;
+    j[platformSelectionText]    = settings.platformSelection;
+    j[colorSelectionText]       = settings.colorSelection;
+    j[styleSelectionText]       = settings.styleSelection;
+    j[rootPathText]             = settings.rootPath;
+    j[projectPathText]          = settings.projectPath;
+    j[versionOptionsText]       = settings.versionOptions;
+    j[switchOptionsText]        = settings.switchOptions;
+    j[preBuildEventsText]       = settings.preBuildEvents;
+    j[postBuildEventsText]      = settings.postBuildEvents;
 
     for (s32 i = 0; i < settings.platformOptions.size(); i++)
     {
@@ -122,14 +126,28 @@ void LoadPlatformSettingsChildren(const std::string& optionsName, const auto& sr
     }
 }
 
+void ValidateLoadConfig(Settings& settings)
+{
+    if (!settings.platformOptions.size())
+    {
+        ShowErrorWindow("Invalid Config", ToString("\'%s\' needs to be greater than 0", platformOptionsText));
+    }
+}
+
 bool LoadConfig(Settings& settings)
 {
     settings = {};
-    std::ifstream i(configFileName);
-    if (i.fail())
+    std::ifstream file(configFileName);
+    if (file.fail())
         return false;
     nlohmann::json j;
-    i >> j;
+    file >> j;
+
+    if (!j[versionText].is_null())
+    {
+        if (j[versionText].get<s32>() != currentVersion)
+            return false;
+    }
 
 #define NOT_NULL_AND_DO_THING(root, name, type, var) \
     if (!root[name].is_null()) \
@@ -138,14 +156,11 @@ bool LoadConfig(Settings& settings)
     }\
     nullptr
 
-    if (!j[versionText].is_null())
-    {
-        if (j[versionText].get<s32>() != currentVersion)
-            return false;
-    }
-    NOT_NULL_AND_DO_THING(j, platformSelectionText, s32, settings.platformSelection);
-    NOT_NULL_AND_DO_THING(j, rootPathText, std::string, settings.rootPath);
-    NOT_NULL_AND_DO_THING(j, projectPathText, std::string, settings.projectPath);
+    NOT_NULL_AND_DO_THING(j, platformSelectionText, s32,            settings.platformSelection);
+    NOT_NULL_AND_DO_THING(j, colorSelectionText,    s32,            settings.colorSelection);
+    NOT_NULL_AND_DO_THING(j, styleSelectionText,    s32,            settings.styleSelection);
+    NOT_NULL_AND_DO_THING(j, rootPathText,          std::string,    settings.rootPath);
+    NOT_NULL_AND_DO_THING(j, projectPathText,       std::string,    settings.projectPath);
 
     GetChildrenString(j, versionOptionsText,   settings.versionOptions);
     GetChildrenString(j, switchOptionsText,    settings.switchOptions);
@@ -170,6 +185,10 @@ bool LoadConfig(Settings& settings)
     if (settings.platformSelection >= settings.platformOptions.size())
         settings.platformSelection = s32(settings.platformOptions.size() - 1);
 
+    Color_Set(settings.colorSelection);
+    Style_Set(settings.styleSelection);
+    ValidateLoadConfig(settings);
+    
     return true;
 }
 
@@ -202,4 +221,12 @@ void LoadDefaults(Settings& settings)
     settings.switchOptions.push_back({ "package" });
     settings.switchOptions.push_back({ "skipcook" });
     settings.switchOptions.push_back({ "skipbuild" });
+
+    Color_Set(settings.colorSelection);
+    Style_Set(settings.styleSelection);
+}
+
+void ClearConfig(Settings& settings)
+{
+    settings = {};
 }

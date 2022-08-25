@@ -79,7 +79,6 @@ void InitOS(SDL_Window* window)
     SDL_SysWMinfo wminfo;
     SDL_VERSION(&wminfo.version);
     assert(SDL_GetWindowWMInfo(window, &wminfo));
-    HWND hwnd = wminfo.info.win.window;
     icon = LoadIcon(instMod, MAKEINTRESOURCE(IDI_ICON1));
     assert(icon != NULL);
 }

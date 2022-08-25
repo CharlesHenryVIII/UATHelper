@@ -1,5 +1,6 @@
 #pragma once
 #include "Math.h"
+#include "Themes.h"
 #include <vector>
 #include <string>
 
@@ -14,6 +15,8 @@ struct PlatformSettings {
 
 struct Settings {
     s32 platformSelection = 0;
+    s32 colorSelection = {};
+    s32 styleSelection = {};
 #if 1
     std::string rootPath;
     std::string projectPath;
@@ -33,3 +36,4 @@ void SortConfig(Settings& set);
 void SaveConfig(Settings& settings);
 bool LoadConfig(Settings& settings);
 void LoadDefaults(Settings& settings);
+void ClearConfig(Settings& settings);
