@@ -484,6 +484,8 @@ int main(int, char**)
 
     // Our state
     bool show_demo_window = false;
+    bool exitProgram = false;
+    bool modifiedSettings = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     // Main loop
@@ -500,9 +502,10 @@ int main(int, char**)
         {
             ImGui_ImplSDL2_ProcessEvent(&event);
             if (event.type == SDL_QUIT)
-                done = true;
+                exitProgram = true;
             if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window))
-                done = true;
+                exitProgram = true;
+                //done = true;
         }
 
         // Start the Dear ImGui frame
@@ -513,6 +516,8 @@ int main(int, char**)
         if (!threading.GetJobsInFlight())
             buildRunning = false;
 
+        if (!modifiedSettings)
+            modifiedSettings = !ConfigIsSameAsLastLoad(settings);
 
 
         
@@ -532,6 +537,10 @@ int main(int, char**)
             ImGuiWindowFlags_NoFocusOnAppearing | 
             ImGuiWindowFlags_NoNav | 
             ImGuiWindowFlags_NoMove;
+        if (modifiedSettings)
+        {
+            windowFlags |= ImGuiWindowFlags_UnsavedDocument;
+        }
 
         if (ImGui::Begin("Main", nullptr, windowFlags))
         {
@@ -795,8 +804,54 @@ int main(int, char**)
                 ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
             }
             ImGui::EndChild();
+
+
+            if (exitProgram)
+            {
+                if (modifiedSettings)
+                {
+                    ImGuiWindowFlags flags =
+                        ImGuiWindowFlags_NoCollapse |
+                        ImGuiWindowFlags_NoSavedSettings;
+                    const ImVec2 min = { 260, 100 };
+                    const ImVec2 windowSize = ImGui::GetMainViewport()->Size;
+                    const ImVec2 max = { windowSize.x - 200, windowSize.y - 200 };
+                    ImGui::SetNextWindowSizeConstraints(min, max);
+                    ImGui::SetNextWindowPos(ImVec2(windowSize.x / 2, windowSize.y / 2), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+                    const char* popupName = "Unsaved Changes";
+                    ImGui::OpenPopup(popupName, ImGuiPopupFlags_None);
+                    if (ImGui::BeginPopupModal(popupName, &exitProgram, flags))
+                    {
+                        float buttonHeight = 30.0f;
+                        ImGui::TextWrapped("The application is being closed without being saved, are you sure you want to continue?");
+                        if (ImGui::Button("Save and Exit", ImVec2(-FLT_MIN, buttonHeight)))
+                        {
+                            SaveConfig(settings);
+                            done = true;
+                        }
+                        ImVec2 saveButtonSize = ImGui::GetItemRectSize();
+                        if (ImGui::Button("Exit Without Saving", ImVec2(saveButtonSize.x * (2.0f / 3.0f), buttonHeight)))
+                        {
+                            done = true;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Cancel", ImVec2(-FLT_MIN, buttonHeight)))
+                        {
+                            ImGui::CloseCurrentPopup();
+                            exitProgram = false;
+                        }
+                        ImGui::EndPopup();
+                    }
+                }
+                else
+                {
+                    done = true;
+                }
+            }
+
             ImGui::End();
         }
+
 
         if (show_demo_window)
             ImGui::ShowDemoWindow(&show_demo_window);

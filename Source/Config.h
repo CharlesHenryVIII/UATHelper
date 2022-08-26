@@ -32,8 +32,9 @@ struct Settings {
 };
 
 
-void SortConfig(Settings& set);
+void SortConfig(Settings& settings);
 void SaveConfig(Settings& settings);
 bool LoadConfig(Settings& settings);
 void LoadDefaults(Settings& settings);
 void ClearConfig(Settings& settings);
+bool ConfigIsSameAsLastLoad(const Settings& settings);

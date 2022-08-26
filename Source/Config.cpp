@@ -24,6 +24,7 @@ const char* enabledPreBuildName     = "Enabled Pre Build";
 const char* enabledPostBuildName    = "Enabled Post Build";
 const s32 currentVersion = 1;
 
+Settings fileSettings;
 
 
 s32 ComparisonFunction(const void* a, const void* b)
@@ -156,34 +157,36 @@ bool LoadConfig(Settings& settings)
     }\
     nullptr
 
-    NOT_NULL_AND_DO_THING(j, platformSelectionText, s32,            settings.platformSelection);
-    NOT_NULL_AND_DO_THING(j, colorSelectionText,    s32,            settings.colorSelection);
-    NOT_NULL_AND_DO_THING(j, styleSelectionText,    s32,            settings.styleSelection);
-    NOT_NULL_AND_DO_THING(j, rootPathText,          std::string,    settings.rootPath);
-    NOT_NULL_AND_DO_THING(j, projectPathText,       std::string,    settings.projectPath);
+    NOT_NULL_AND_DO_THING(j, platformSelectionText, s32,            fileSettings.platformSelection);
+    NOT_NULL_AND_DO_THING(j, colorSelectionText,    s32,            fileSettings.colorSelection);
+    NOT_NULL_AND_DO_THING(j, styleSelectionText,    s32,            fileSettings.styleSelection);
+    NOT_NULL_AND_DO_THING(j, rootPathText,          std::string,    fileSettings.rootPath);
+    NOT_NULL_AND_DO_THING(j, projectPathText,       std::string,    fileSettings.projectPath);
 
-    GetChildrenString(j, versionOptionsText,   settings.versionOptions);
-    GetChildrenString(j, switchOptionsText,    settings.switchOptions);
-    GetChildrenString(j, preBuildEventsText,  settings.preBuildEvents);
-    GetChildrenString(j, postBuildEventsText, settings.postBuildEvents);
+    GetChildrenString(j, versionOptionsText,   fileSettings.versionOptions);
+    GetChildrenString(j, switchOptionsText,    fileSettings.switchOptions);
+    GetChildrenString(j, preBuildEventsText,  fileSettings.preBuildEvents);
+    GetChildrenString(j, postBuildEventsText, fileSettings.postBuildEvents);
 
     assert(!j[platformOptionsText].is_null());
 
     for (auto it = j[platformOptionsText].begin(); it != j[platformOptionsText].end(); it++)
     {
-        auto& po = settings.platformOptions;
+        auto& po = fileSettings.platformOptions;
         po.push_back({ it.key() });
         if (it.value().is_null())
             continue;
 
-        LoadPlatformSettingsChildren(enabledVersionsText,    it.value(), po[po.size() - 1].enabledVersions,  settings.versionOptions);
-        LoadPlatformSettingsChildren(enabledSwitchesName,    it.value(), po[po.size() - 1].enabledSwitches,  settings.switchOptions);
-        LoadPlatformSettingsChildren(enabledPreBuildName,   it.value(), po[po.size() - 1].enabledPreBuild,  settings.preBuildEvents);
-        LoadPlatformSettingsChildren(enabledPostBuildName,  it.value(), po[po.size() - 1].enabledPostBuild, settings.postBuildEvents);
+        LoadPlatformSettingsChildren(enabledVersionsText,    it.value(), po[po.size() - 1].enabledVersions,  fileSettings.versionOptions);
+        LoadPlatformSettingsChildren(enabledSwitchesName,    it.value(), po[po.size() - 1].enabledSwitches,  fileSettings.switchOptions);
+        LoadPlatformSettingsChildren(enabledPreBuildName,   it.value(), po[po.size() - 1].enabledPreBuild,  fileSettings.preBuildEvents);
+        LoadPlatformSettingsChildren(enabledPostBuildName,  it.value(), po[po.size() - 1].enabledPostBuild, fileSettings.postBuildEvents);
     }
 
-    if (settings.platformSelection >= settings.platformOptions.size())
-        settings.platformSelection = s32(settings.platformOptions.size() - 1);
+    if (fileSettings.platformSelection >= fileSettings.platformOptions.size())
+        fileSettings.platformSelection = s32(fileSettings.platformOptions.size() - 1);
+
+    settings = fileSettings;
 
     Color_Set(settings.colorSelection);
     Style_Set(settings.styleSelection);
@@ -229,4 +232,60 @@ void LoadDefaults(Settings& settings)
 void ClearConfig(Settings& settings)
 {
     settings = {};
+}
+
+
+
+bool ConfigIsSameAsLastLoad(const Settings& s)
+{
+#define ROOTCMP(__member)                       \
+if (s. ## __member != fileSettings. ## __member)\
+    return false
+
+#define ARRCMP(__a, __b)                                        \
+do {                                                            \
+    if (__a ## .size() != __b ## .size())                       \
+        return false;                                           \
+    else                                                        \
+    {                                                           \
+            for (s32 index = 0; index < __a ## .size(); index++)\
+            {                                                   \
+                 if (__a ## [index] != __b ## [index])\
+                    return false;                               \
+            }}}                                                 \
+while (0)
+
+#define CHILDCMP(__index, __member)                      \
+if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__index]. ## __member)\
+    return false
+
+
+    ROOTCMP(platformSelection);
+    ROOTCMP(colorSelection);
+    ROOTCMP(styleSelection);
+    ROOTCMP(rootPath);
+    ROOTCMP(projectPath);
+
+    ARRCMP(s.versionOptions, fileSettings.versionOptions);
+    ARRCMP(s.switchOptions, fileSettings.switchOptions);
+    ARRCMP(s.preBuildEvents, fileSettings.preBuildEvents);
+    ARRCMP(s.postBuildEvents, fileSettings.postBuildEvents);
+
+    if (s.platformOptions.size() != fileSettings.platformOptions.size())
+        return false;
+    else
+    {
+        for (s32 i = 0; i < s.platformOptions.size(); i++)
+        {
+            CHILDCMP(i, name);
+            ARRCMP(s.platformOptions[i].enabledVersions, fileSettings.platformOptions[i].enabledVersions);
+            ARRCMP(s.platformOptions[i].enabledSwitches, fileSettings.platformOptions[i].enabledSwitches);
+            ARRCMP(s.platformOptions[i].enabledPreBuild, fileSettings.platformOptions[i].enabledPreBuild);
+            ARRCMP(s.platformOptions[i].enabledPostBuild, fileSettings.platformOptions[i].enabledPostBuild);
+        }
+    }
+
+
+
+    return true;
 }

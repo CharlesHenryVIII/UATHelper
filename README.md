@@ -13,6 +13,6 @@
 * Build/run from there
 
 ### TODO
-- [ ] Add popup to save when closing
+- [X] Add popup to save when closing
 - [ ] Convert to GLFW to remove the dependancy on dlls
-- [ ] Track when changes were made to config to properly notify to save
+- [X] Track when changes were made to config to properly notify to save
