@@ -522,7 +522,6 @@ int main(int, char**)
                 modifiedSettings = !ConfigIsSameAsLastLoad(settings);
 
 
-
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
             ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always, {});
             ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
@@ -551,7 +550,7 @@ int main(int, char**)
                 {
                     if (ImGui::BeginMenu("Settings"))
                     {
-                        //ZoneScopedN("Settings");
+                        ZoneScopedN("Settings");
                         ImGui::Text("Color:");
                         ImGui::SameLine();
                         ImGui::SetNextItemWidth(100);

@@ -1,6 +1,3 @@
 [submodule "Contrib/imgui"]
 	path = Contrib/imgui
 	url = https://github.com/ocornut/imgui
-[submodule "Contrib/tracy-profiler"]
-	path = Contrib/tracy-profiler
-	url = https://github.com/wolfpld/tracy
