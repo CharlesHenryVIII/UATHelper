@@ -7,6 +7,8 @@
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_opengl3.h"
 
+#include "Tracy.hpp"
+
 #include "Windows.h"
 #include "Math.h"
 #include "Threading.h"
@@ -23,8 +25,6 @@
 #else
 #include <SDL_opengl.h>
 #endif
-
-#define DEVELOPMENT 1
 
 
 
@@ -492,378 +492,410 @@ int main(int, char**)
     bool done = false;
     while (!done)
     {
-        // Poll and handle events (inputs, window resize, etc.)
-        // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
-        // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
-        // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
-        // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
-        SDL_Event event;
-        while (SDL_PollEvent(&event))
         {
-            ImGui_ImplSDL2_ProcessEvent(&event);
-            if (event.type == SDL_QUIT)
-                exitProgram = true;
-            if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window))
-                exitProgram = true;
+            ZoneScopedN("Frame Update:");
+            // Poll and handle events (inputs, window resize, etc.)
+            // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
+            // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
+            // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
+            // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
+            SDL_Event event;
+            while (SDL_PollEvent(&event))
+            {
+                ImGui_ImplSDL2_ProcessEvent(&event);
+                if (event.type == SDL_QUIT)
+                    exitProgram = true;
+                if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window))
+                    exitProgram = true;
                 //done = true;
-        }
+            }
 
-        // Start the Dear ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplSDL2_NewFrame();
-        ImGui::NewFrame();
-        //ImGui::PushFont(mainFont);
-        if (!threading.GetJobsInFlight())
-            buildRunning = false;
+            // Start the Dear ImGui frame
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplSDL2_NewFrame();
+            ImGui::NewFrame();
+            //ImGui::PushFont(mainFont);
+            if (!threading.GetJobsInFlight())
+                buildRunning = false;
 
-        if (!modifiedSettings)
-            modifiedSettings = !ConfigIsSameAsLastLoad(settings);
+            if (!modifiedSettings)
+                modifiedSettings = !ConfigIsSameAsLastLoad(settings);
 
 
-        
-        const ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always, {});
-        ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(1.0f); // Transparent background
-        ImGuiWindowFlags windowFlags = 
-            //ImGuiWindowFlags_NoBackground |
+
+            const ImGuiViewport* viewport = ImGui::GetMainViewport();
+            ImGui::SetNextWindowPos(viewport->WorkPos, ImGuiCond_Always, {});
+            ImGui::SetNextWindowSize(viewport->WorkSize, ImGuiCond_Always);
+            ImGui::SetNextWindowBgAlpha(1.0f); // Transparent background
+            ImGuiWindowFlags windowFlags =
+                //ImGuiWindowFlags_NoBackground |
 #if 0
-            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
+                ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
 #else
-            ImGuiWindowFlags_NoDecoration | 
+                ImGuiWindowFlags_NoDecoration |
 #endif
-            ImGuiWindowFlags_MenuBar |
-            ImGuiWindowFlags_NoSavedSettings |
-            ImGuiWindowFlags_NoFocusOnAppearing | 
-            ImGuiWindowFlags_NoNav | 
-            ImGuiWindowFlags_NoMove;
-        if (modifiedSettings)
-        {
-            windowFlags |= ImGuiWindowFlags_UnsavedDocument;
-        }
-
-        if (ImGui::Begin("Main", nullptr, windowFlags))
-        {
-            if (ImGui::BeginMenuBar())
-            {
-                if (ImGui::BeginMenu("Settings"))
-                {
-                    ImGui::Text("Color:");
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(100);
-                    if (ImGui::Combo("##Color", &settings.colorSelection, GetCStringFromThemes, &ColorOptions, (s32)Color_Count))
-                        Color_Set(settings.colorSelection);
-                    ImGui::Text("Style:");
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(100);
-                    if (ImGui::Combo("##Style", &settings.styleSelection, GetCStringFromThemes, &StyleOptions, (s32)Style_Count))
-                        Style_Set(settings.styleSelection);
-
-                    ImGui::EndMenu();
-                }
-                if (ImGui::BeginMenu("Config"))
-                {
-                    if (ImGui::MenuItem("Save Config", "Ctrl+S"))
-                        SaveConfig(settings);
-                    if (ImGui::MenuItem("Load Config", "Ctrl+L"))
-                        LoadConfig(settings);
-                    if (ImGui::MenuItem("Clear Config"))
-                        ClearConfig(settings);
-                    ImGui::EndMenu();
-                }
-                ImGui::EndMenuBar();
-            }
-            ImGuiWindowFlags sectionFlags = 
-                ImGuiWindowFlags_NoResize | 
-                ImGuiWindowFlags_NoSavedSettings | 
-                ImGuiWindowFlags_NoCollapse | 
-                ImGuiWindowFlags_NoFocusOnAppearing | 
+                ImGuiWindowFlags_MenuBar |
+                ImGuiWindowFlags_NoSavedSettings |
+                ImGuiWindowFlags_NoFocusOnAppearing |
+                ImGuiWindowFlags_NoNav |
                 ImGuiWindowFlags_NoMove;
-
-            f32 xScale = 1.0f;
-            float topWindowHeightScale = 0.12f;
-            ImVec2 locationScale = { xScale / 2, topWindowHeightScale };
-            ImVec2 locationSize = HadamardProduct(viewport->WorkSize, locationScale);
-            locationSize.x -= 1.5f * style.WindowPadding.x;
-            if (ImGui::BeginChild("File Paths", locationSize, true, sectionFlags | ImGuiWindowFlags_NoScrollbar))
+            if (modifiedSettings)
             {
-#ifdef DEBUG
-                ImGui::Checkbox("Show Demo Window", &show_demo_window);
-                ImGui::SameLine();
-#endif
-                TextCentered("File Paths");
-
-                ImGui::Text("Main Directory");
-                ImGui::SameLine();
-                std::string demoMainDir = "C:/UnrealEngine/Project";
-                HelpMarker(demoMainDir);
-                ImGui::SameLine();
-                ImGui::PushItemWidth(-FLT_MIN);
-                InputTextDynamicSize("##" + demoMainDir, settings.rootPath);
-                CleanPathString(settings.rootPath);
-
-                ImGui::Text("Path to .uproject");
-                std::string demoProjectPath = "C:/UnrealEngine/Project/Title/title.uproject";
-                ImGui::SameLine();
-                HelpMarker(demoProjectPath);
-                ImGui::SameLine();
-                InputTextDynamicSize("##" + demoProjectPath, settings.projectPath);
-                CleanPathString(settings.projectPath);
+                windowFlags |= ImGuiWindowFlags_UnsavedDocument;
             }
-            ImGui::EndChild();
-            ImGui::SameLine();
 
-            ImVec2 platformScale = { xScale / 2, topWindowHeightScale };
-            ImVec2 platformSize = HadamardProduct(viewport->WorkSize, platformScale);
-            platformSize.x -= 1.5f * style.WindowPadding.x;
-            if (ImGui::BeginChild("Grouping", platformSize, true, sectionFlags))
+            if (ImGui::Begin("Main", nullptr, windowFlags))
             {
-                ImGui::Text("Platform Selection");
-                ImGui::SameLine();
-                ImGui::SetNextItemWidth(150);
-                ImGui::Combo("##Platform Selection", &settings.platformSelection, GetCStringFromPlatformSettings,
-                    &settings.platformOptions, (s32)settings.platformOptions.size());
-                static std::string platformAddText;
-                if (NameStatusButtonAdd("Platform", platformAddText, __LINE__))
+                ZoneScopedN("Main");
+                if (ImGui::BeginMenuBar())
                 {
-                    settings.platformOptions.push_back({ platformAddText });
-                    platformAddText.clear();
-                }
-
-                ImGui::Text("Version Selection");
-                ImGui::SameLine();
-                static std::string versionInputName;
-                if (NameStatusButtonAdd("Version", versionInputName, __LINE__))
-                {
-                    settings.versionOptions.push_back({ versionInputName });
-                    versionInputName.clear();
-                }
-                ImGui::NewLine();
-                float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
-                float last_button_x2 = 0;
-                ImGuiStyle& style = ImGui::GetStyle();
-                for (int i = 0; i < settings.versionOptions.size(); i++)
-                {
-                    float button_szx = ImGui::CalcTextSize(settings.versionOptions[i].c_str()).x + 2 * style.FramePadding.x;
-                    float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
-                    if (next_button_x2 < window_visible_x2)
-                        ImGui::SameLine(0, 1);
-                    bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
-                    bool checkbox = found;
-                    ImGui::Checkbox(settings.versionOptions[i].c_str(), &checkbox);
-                    if (checkbox != found)
+                    if (ImGui::BeginMenu("Settings"))
                     {
-                        if (found)
-                            RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
-                        else
-                            settings.platformOptions[settings.platformSelection].enabledVersions.push_back(i);
-                    }
-                    last_button_x2 = ImGui::GetItemRectMax().x;
-                }
-
-                
-            }
-            ImGui::EndChild();
-
-            ImVec2 switchesScale = { 0, 0.2f };
-            ImVec2 switchesSize = HadamardProduct(viewport->WorkSize, switchesScale);
-            if (ImGui::BeginChild("Switches", switchesSize, true, sectionFlags))
-            {
-                TextCentered("Switch Selection");
-                ImGui::NewLine();
-                float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
-                float last_button_x2 = 0;
-                ImGuiStyle& style = ImGui::GetStyle();
-                for (int i = 0; i < settings.switchOptions.size(); i++)
-                {
-                    float button_szx = ImGui::CalcTextSize(settings.switchOptions[i].c_str()).x + 2 * style.FramePadding.x;
-                    float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
-                    if (next_button_x2 < window_visible_x2)
-                        ImGui::SameLine(0, 1);
-                    bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
-                    bool checkbox = found;
-                    ImGui::Checkbox(settings.switchOptions[i].c_str(), &checkbox);
-                    if (checkbox != found)
-                    {
-                        if (found)
-                            RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
-                        else
-                            settings.platformOptions[settings.platformSelection].enabledSwitches.push_back(i);
-                    }
-                    last_button_x2 = ImGui::GetItemRectMax().x;
-                }
-                static std::string name;
-                if (NameStatusButtonAdd("Switch", name, __LINE__))
-                {
-                    settings.switchOptions.push_back({ name });
-                    name.clear();
-                }
-            }
-            ImGui::EndChild();
-
-            ImVec2 executionScale = { 0, 0.35f };
-            ImVec2 executionSize = HadamardProduct(viewport->WorkSize, executionScale);
-            if (ImGui::BeginChild("Building", executionSize, true, sectionFlags))
-            {
-                TextCentered("Build Events");
-
-                static std::string preBuildInput;
-                if (settings.platformOptions.size())
-                    ExecutionSection("Pre-Build", settings.preBuildEvents, settings.platformOptions[settings.platformSelection].enabledPreBuild, preBuildInput);
-
-                static std::string postBuildInput;
-                if (settings.platformOptions.size())
-                    ExecutionSection("Post-Build", settings.postBuildEvents, settings.platformOptions[settings.platformSelection].enabledPostBuild, postBuildInput);
-            }
-            ImGui::EndChild();
-
-            ImVec2 commandScale = { 0, 0.25f };
-            ImVec2 commandSize = HadamardProduct(viewport->WorkSize, commandScale);
-            if (ImGui::BeginChild("Command Line", ImVec2(0,0), true, sectionFlags))
-            {
-                TextCentered("Command Line Output");
-
-                bool invalid_projectPath = settings.projectPath.size() < 10;
-                bool invalid_rootPath = settings.rootPath.size() < 3;
-                bool invalid_platformOptions = !(settings.platformOptions.size());
-                bool invalid_versionSelected = true;
-                if (!invalid_platformOptions)
-                    invalid_versionSelected = !(settings.platformOptions[settings.platformSelection].enabledVersions.size());
-                bool commandLineInvalid = invalid_projectPath || invalid_rootPath || invalid_platformOptions || invalid_versionSelected;
-
-                finalCommandLine.clear();
-                if (commandLineInvalid)
-                {
-                    if (invalid_rootPath)
-                    {
-                        finalCommandLine = "Invalid Main Directory";
-                    }
-                    else if (invalid_projectPath)
-                    {
-                        finalCommandLine = "Invalid Project Path";
-                    }
-                    else if (invalid_platformOptions)
-                    {
-                        finalCommandLine = "Invalid Platform Options";
-                    }
-                    else if (invalid_versionSelected)
-                    {
-                        finalCommandLine = "Invalid Version Selected";
-                    }
-                }
-                else
-                {
-                    finalCommandLine += settings.rootPath.c_str();
-                    finalCommandLine += "Engine/Build/BatchFiles/RunUAT.bat BuildCookRun ";
-                    finalCommandLine += "-project=";
-                    finalCommandLine += settings.projectPath.c_str();
-                    finalCommandLine += " -targetplatform=";
-                    finalCommandLine += settings.platformOptions[settings.platformSelection].name;
-                    finalCommandLine += " -clientconfig=";
-                    bool alreadyOneEnabled = false;
-                    for (const auto& optionIndex : settings.platformOptions[settings.platformSelection].enabledVersions)
-                    {
-                        if (alreadyOneEnabled)
-                            finalCommandLine += "+";
-                        finalCommandLine += settings.versionOptions[optionIndex];
-                        alreadyOneEnabled = true;
-                    }
-                    finalCommandLine += " -servertargetplatform=win64";
-                    finalCommandLine += " -serverconfig=Development";
-
-                    for (const auto& optionIndex : settings.platformOptions[settings.platformSelection].enabledSwitches)
-                    {
-                        finalCommandLine += " -";
-                        finalCommandLine += settings.switchOptions[optionIndex];
-                    }
-                }
-
-                ImGui::TextWrapped(finalCommandLine.c_str());
-
-                if (ImGui::Button("Copy To Clipboard"))
-                {
-                    SDL_SetClipboardText(finalCommandLine.c_str());
-                }
-                ImGui::SameLine();
-                if (buildRunning || commandLineInvalid)
-                    ImGui::BeginDisabled();
-                if (ImGui::Button("RUN"))
-                {
-                    RunProcessList(settings.preBuildEvents,
-                        settings.platformOptions[settings.platformSelection].enabledPreBuild,
-                        threading);
-#if NDEBUG
-                    RunProcess(finalCommandLine, threading);
-#endif
-                    RunProcessList(settings.postBuildEvents,
-                        settings.platformOptions[settings.platformSelection].enabledPostBuild,
-                        threading);
-                }
-                if (buildRunning || commandLineInvalid)
-                    ImGui::EndDisabled();
-                ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            }
-            ImGui::EndChild();
-
-
-            if (exitProgram)
-            {
-                if (modifiedSettings)
-                {
-                    ImGuiWindowFlags flags =
-                        ImGuiWindowFlags_NoCollapse |
-                        ImGuiWindowFlags_NoSavedSettings;
-                    const ImVec2 min = { 260, 100 };
-                    const ImVec2 windowSize = ImGui::GetMainViewport()->Size;
-                    const ImVec2 max = { windowSize.x - 200, windowSize.y - 200 };
-                    ImGui::SetNextWindowSizeConstraints(min, max);
-                    ImGui::SetNextWindowPos(ImVec2(windowSize.x / 2, windowSize.y / 2), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-                    const char* popupName = "Unsaved Changes";
-                    ImGui::OpenPopup(popupName, ImGuiPopupFlags_None);
-                    if (ImGui::BeginPopupModal(popupName, &exitProgram, flags))
-                    {
-                        float buttonHeight = 30.0f;
-                        ImGui::TextWrapped("The application is being closed without being saved, are you sure you want to continue?");
-                        if (ImGui::Button("Save and Exit", ImVec2(-FLT_MIN, buttonHeight)))
-                        {
-                            SaveConfig(settings);
-                            done = true;
-                        }
-                        ImVec2 saveButtonSize = ImGui::GetItemRectSize();
-                        if (ImGui::Button("Exit Without Saving", ImVec2(saveButtonSize.x * (2.0f / 3.0f), buttonHeight)))
-                        {
-                            done = true;
-                        }
+                        //ZoneScopedN("Settings");
+                        ImGui::Text("Color:");
                         ImGui::SameLine();
-                        if (ImGui::Button("Cancel", ImVec2(-FLT_MIN, buttonHeight)))
+                        ImGui::SetNextItemWidth(100);
+                        if (ImGui::Combo("##Color", &settings.colorSelection, GetCStringFromThemes, &ColorOptions, (s32)Color_Count))
+                            Color_Set(settings.colorSelection);
+                        ImGui::Text("Style:");
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(100);
+                        if (ImGui::Combo("##Style", &settings.styleSelection, GetCStringFromThemes, &StyleOptions, (s32)Style_Count))
+                            Style_Set(settings.styleSelection);
+
+                        ImGui::EndMenu();
+                    }
+                    if (ImGui::BeginMenu("Config"))
+                    {
+                        ZoneScopedN("Config");
+                        if (ImGui::MenuItem("Save Config", "Ctrl+S"))
+                            SaveConfig(settings);
+                        if (ImGui::MenuItem("Load Config", "Ctrl+L"))
+                            LoadConfig(settings);
+                        if (ImGui::MenuItem("Clear Config"))
+                            ClearConfig(settings);
+                        ImGui::EndMenu();
+                    }
+                    ImGui::EndMenuBar();
+                }
+                ImGuiWindowFlags sectionFlags =
+                    ImGuiWindowFlags_NoResize |
+                    ImGuiWindowFlags_NoSavedSettings |
+                    ImGuiWindowFlags_NoCollapse |
+                    ImGuiWindowFlags_NoFocusOnAppearing |
+                    ImGuiWindowFlags_NoMove;
+
+                f32 xScale = 1.0f;
+                float topWindowHeightScale = 0.12f;
+                ImVec2 locationScale = { xScale / 2, topWindowHeightScale };
+                ImVec2 locationSize = HadamardProduct(viewport->WorkSize, locationScale);
+                locationSize.x -= 1.5f * style.WindowPadding.x;
+                if (ImGui::BeginChild("File Paths", locationSize, true, sectionFlags | ImGuiWindowFlags_NoScrollbar))
+                {
+                    ZoneScopedN("File Paths");
+#ifdef DEBUG
+                    ImGui::Checkbox("Show Demo Window", &show_demo_window);
+                    ImGui::SameLine();
+#endif
+                    TextCentered("File Paths");
+
+                    ImGui::Text("Main Directory");
+                    ImGui::SameLine();
+                    std::string demoMainDir = "C:/UnrealEngine/Project";
+                    HelpMarker(demoMainDir);
+                    ImGui::SameLine();
+                    ImGui::PushItemWidth(-FLT_MIN);
+                    InputTextDynamicSize("##" + demoMainDir, settings.rootPath);
+                    CleanPathString(settings.rootPath);
+
+                    ImGui::Text("Path to .uproject");
+                    std::string demoProjectPath = "C:/UnrealEngine/Project/Title/title.uproject";
+                    ImGui::SameLine();
+                    HelpMarker(demoProjectPath);
+                    ImGui::SameLine();
+                    InputTextDynamicSize("##" + demoProjectPath, settings.projectPath);
+                    CleanPathString(settings.projectPath);
+                }
+                ImGui::EndChild();
+                ImGui::SameLine();
+
+                ImVec2 platformScale = { xScale / 2, topWindowHeightScale };
+                ImVec2 platformSize = HadamardProduct(viewport->WorkSize, platformScale);
+                platformSize.x -= 1.5f * style.WindowPadding.x;
+                if (ImGui::BeginChild("Grouping", platformSize, true, sectionFlags))
+                {
+                    ZoneScopedN("Grouping");
+                    ImGui::Text("Platform Selection");
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(150);
+                    ImGui::Combo("##Platform Selection", &settings.platformSelection, GetCStringFromPlatformSettings,
+                        &settings.platformOptions, (s32)settings.platformOptions.size());
+                    static std::string platformAddText;
+                    if (NameStatusButtonAdd("Platform", platformAddText, __LINE__))
+                    {
+                        settings.platformOptions.push_back({ platformAddText });
+                        platformAddText.clear();
+                    }
+
+                    ImGui::Text("Version Selection");
+                    ImGui::SameLine();
+                    static std::string versionInputName;
+                    if (NameStatusButtonAdd("Version", versionInputName, __LINE__))
+                    {
+                        settings.versionOptions.push_back({ versionInputName });
+                        versionInputName.clear();
+                    }
+                    ImGui::NewLine();
+                    float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+                    float last_button_x2 = 0;
+                    ImGuiStyle& style = ImGui::GetStyle();
+                    for (int i = 0; i < settings.versionOptions.size(); i++)
+                    {
+                        float button_szx = ImGui::CalcTextSize(settings.versionOptions[i].c_str()).x + 2 * style.FramePadding.x;
+                        float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
+                        if (next_button_x2 < window_visible_x2)
+                            ImGui::SameLine(0, 1);
+                        bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
+                        bool checkbox = found;
+                        ImGui::Checkbox(settings.versionOptions[i].c_str(), &checkbox);
+                        if (checkbox != found)
                         {
-                            ImGui::CloseCurrentPopup();
-                            exitProgram = false;
+                            if (found)
+                                RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
+                            else
+                                settings.platformOptions[settings.platformSelection].enabledVersions.push_back(i);
                         }
-                        ImGui::EndPopup();
+                        last_button_x2 = ImGui::GetItemRectMax().x;
+                    }
+
+
+                }
+                ImGui::EndChild();
+
+                ImVec2 switchesScale = { 0, 0.2f };
+                ImVec2 switchesSize = HadamardProduct(viewport->WorkSize, switchesScale);
+                if (ImGui::BeginChild("Switches", switchesSize, true, sectionFlags))
+                {
+                    ZoneScopedN("Switches");
+                    TextCentered("Switch Selection");
+                    ImGui::NewLine();
+                    float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
+                    float last_button_x2 = 0;
+                    ImGuiStyle& style = ImGui::GetStyle();
+                    for (int i = 0; i < settings.switchOptions.size(); i++)
+                    {
+                        float button_szx = ImGui::CalcTextSize(settings.switchOptions[i].c_str()).x + 2 * style.FramePadding.x;
+                        float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
+                        if (next_button_x2 < window_visible_x2)
+                            ImGui::SameLine(0, 1);
+                        bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
+                        bool checkbox = found;
+                        ImGui::Checkbox(settings.switchOptions[i].c_str(), &checkbox);
+                        if (checkbox != found)
+                        {
+                            if (found)
+                                RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
+                            else
+                                settings.platformOptions[settings.platformSelection].enabledSwitches.push_back(i);
+                        }
+                        last_button_x2 = ImGui::GetItemRectMax().x;
+                    }
+                    static std::string name;
+                    if (NameStatusButtonAdd("Switch", name, __LINE__))
+                    {
+                        settings.switchOptions.push_back({ name });
+                        name.clear();
                     }
                 }
-                else
+                ImGui::EndChild();
+
+                ImVec2 executionScale = { 0, 0.35f };
+                ImVec2 executionSize = HadamardProduct(viewport->WorkSize, executionScale);
+                if (ImGui::BeginChild("Building", executionSize, true, sectionFlags))
                 {
-                    done = true;
+                    //ZoneScopedN("Building");
+                    TextCentered("Build Events");
+
+                    static std::string preBuildInput;
+                    if (settings.platformOptions.size())
+                        ExecutionSection("Pre-Build", settings.preBuildEvents, settings.platformOptions[settings.platformSelection].enabledPreBuild, preBuildInput);
+
+                    static std::string postBuildInput;
+                    if (settings.platformOptions.size())
+                        ExecutionSection("Post-Build", settings.postBuildEvents, settings.platformOptions[settings.platformSelection].enabledPostBuild, postBuildInput);
                 }
+                ImGui::EndChild();
+
+                ImVec2 commandScale = { 0, 0.25f };
+                ImVec2 commandSize = HadamardProduct(viewport->WorkSize, commandScale);
+                if (ImGui::BeginChild("Command Line", ImVec2(0, 0), true, sectionFlags))
+                {
+                    ZoneScopedN("Command Line");
+                    TextCentered("Command Line Output");
+
+                    bool invalid_projectPath = settings.projectPath.size() < 10;
+                    bool invalid_rootPath = settings.rootPath.size() < 3;
+                    bool invalid_platformOptions = !(settings.platformOptions.size());
+                    bool invalid_versionSelected = true;
+                    if (!invalid_platformOptions)
+                        invalid_versionSelected = !(settings.platformOptions[settings.platformSelection].enabledVersions.size());
+                    bool commandLineInvalid = invalid_projectPath || invalid_rootPath || invalid_platformOptions || invalid_versionSelected;
+
+                    finalCommandLine.clear();
+                    if (commandLineInvalid)
+                    {
+                        if (invalid_rootPath)
+                        {
+                            finalCommandLine = "Invalid Main Directory";
+                        }
+                        else if (invalid_projectPath)
+                        {
+                            finalCommandLine = "Invalid Project Path";
+                        }
+                        else if (invalid_platformOptions)
+                        {
+                            finalCommandLine = "Invalid Platform Options";
+                        }
+                        else if (invalid_versionSelected)
+                        {
+                            finalCommandLine = "Invalid Version Selected";
+                        }
+                    }
+                    else
+                    {
+                        finalCommandLine += settings.rootPath.c_str();
+                        finalCommandLine += "Engine/Build/BatchFiles/RunUAT.bat BuildCookRun ";
+                        finalCommandLine += "-project=";
+                        finalCommandLine += settings.projectPath.c_str();
+                        finalCommandLine += " -targetplatform=";
+                        finalCommandLine += settings.platformOptions[settings.platformSelection].name;
+                        finalCommandLine += " -clientconfig=";
+                        bool alreadyOneEnabled = false;
+                        for (const auto& optionIndex : settings.platformOptions[settings.platformSelection].enabledVersions)
+                        {
+                            if (alreadyOneEnabled)
+                                finalCommandLine += "+";
+                            finalCommandLine += settings.versionOptions[optionIndex];
+                            alreadyOneEnabled = true;
+                        }
+                        finalCommandLine += " -servertargetplatform=win64";
+                        finalCommandLine += " -serverconfig=Development";
+
+                        for (const auto& optionIndex : settings.platformOptions[settings.platformSelection].enabledSwitches)
+                        {
+                            finalCommandLine += " -";
+                            finalCommandLine += settings.switchOptions[optionIndex];
+                        }
+                    }
+
+                    ImGui::TextWrapped(finalCommandLine.c_str());
+
+                    if (ImGui::Button("Copy To Clipboard"))
+                    {
+                        SDL_SetClipboardText(finalCommandLine.c_str());
+                    }
+                    ImGui::SameLine();
+                    if (buildRunning || commandLineInvalid)
+                        ImGui::BeginDisabled();
+                    if (ImGui::Button("RUN"))
+                    {
+                        RunProcessList(settings.preBuildEvents,
+                            settings.platformOptions[settings.platformSelection].enabledPreBuild,
+                            threading);
+#if NDEBUG
+                        RunProcess(finalCommandLine, threading);
+#endif
+                        RunProcessList(settings.postBuildEvents,
+                            settings.platformOptions[settings.platformSelection].enabledPostBuild,
+                            threading);
+                    }
+                    if (buildRunning || commandLineInvalid)
+                        ImGui::EndDisabled();
+                    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                }
+                ImGui::EndChild();
+
+
+                if (exitProgram)
+                {
+                    if (modifiedSettings)
+                    {
+                        ImGuiWindowFlags flags =
+                            ImGuiWindowFlags_NoCollapse |
+                            ImGuiWindowFlags_NoSavedSettings;
+                        const ImVec2 min = { 260, 100 };
+                        const ImVec2 windowSize = ImGui::GetMainViewport()->Size;
+                        const ImVec2 max = { windowSize.x - 200, windowSize.y - 200 };
+                        ImGui::SetNextWindowSizeConstraints(min, max);
+                        ImGui::SetNextWindowPos(ImVec2(windowSize.x / 2, windowSize.y / 2), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+                        const char* popupName = "Unsaved Changes";
+                        ImGui::OpenPopup(popupName, ImGuiPopupFlags_None);
+                        if (ImGui::BeginPopupModal(popupName, &exitProgram, flags))
+                        {
+                            float buttonHeight = 30.0f;
+                            ImGui::TextWrapped("The application is being closed without being saved, are you sure you want to continue?");
+                            if (ImGui::Button("Save and Exit", ImVec2(-FLT_MIN, buttonHeight)))
+                            {
+                                SaveConfig(settings);
+                                done = true;
+                            }
+                            ImVec2 saveButtonSize = ImGui::GetItemRectSize();
+                            if (ImGui::Button("Exit Without Saving", ImVec2(saveButtonSize.x * (2.0f / 3.0f), buttonHeight)))
+                            {
+                                done = true;
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Cancel", ImVec2(-FLT_MIN, buttonHeight)))
+                            {
+                                ImGui::CloseCurrentPopup();
+                                exitProgram = false;
+                            }
+                            ImGui::EndPopup();
+                        }
+                    }
+                    else
+                    {
+                        done = true;
+                    }
+                }
+
+                ImGui::End();
             }
 
-            ImGui::End();
+
+            if (show_demo_window)
+                ImGui::ShowDemoWindow(&show_demo_window);
+
+            {
+                ZoneScopedN("ImGui Render");
+                // Rendering
+                //ImGui::PopFont();
+                {
+                    ZoneScopedN("ImGui Render");
+                    ImGui::Render();
+                }
+                {
+                    ZoneScopedN("glViewport");
+                    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+                }
+                {
+                    ZoneScopedN("glClearColor");
+                    glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
+                }
+                {
+                    ZoneScopedN("glClear");
+                    glClear(GL_COLOR_BUFFER_BIT);
+                }
+                {
+                    ZoneScopedN("RenderDrawData");
+                    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+                }
+            }
         }
-
-
-        if (show_demo_window)
-            ImGui::ShowDemoWindow(&show_demo_window);
-
-        // Rendering
-        //ImGui::PopFont();
-        ImGui::Render();
-        glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
-        glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        SDL_GL_SwapWindow(window);
+        {
+            ZoneScopedN("Frame End");
+            SDL_GL_SwapWindow(window);
+        }
     }
 
     // Cleanup

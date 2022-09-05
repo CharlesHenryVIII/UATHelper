@@ -20,12 +20,14 @@ project "UATHelper"
    libdirs {
        "Contrib/SDL/lib/%{cfg.platform}/",
        "Contrib/imgui",
+       "Contrib/tracy-profiler",
        --"Contrib/**",
    }
    includedirs {
        "Contrib/*",
        "Contrib/imgui/backends",
        "Contrib/SDL/include",
+       "Contrib/tracy-profiler",
        "Contrib"
        --"Contrib/**"
    }
@@ -43,6 +45,7 @@ project "UATHelper"
        --"Source/**.c",
        --"Source/**.cpp",
        --"Source/**.hpp",
+       "Contrib/tracy-profiler/TracyClient.cpp",
        "Contrib/imgui/*.cpp",
        "Contrib/imgui/*.h",
        "Contrib/imgui/backends/imgui_impl_opengl3.cpp",
@@ -58,12 +61,12 @@ project "UATHelper"
 
 
    filter "configurations:Debug"
-      defines { "DEBUG" }
+      defines { "DEBUG", "TRACY_ENABLE"}
       symbols  "On"
       optimize "Off"
 
    filter "configurations:Profile"
-      defines { "NDEBUG" }
+      defines { "NDEBUG", "TRACY_ENABLE"}
       symbols  "on"
       optimize "On"
 
