@@ -7,6 +7,7 @@
 #include "imgui_impl_sdl.h"
 #include "imgui_impl_opengl3.h"
 
+//v0.8.2
 #include "Tracy.hpp"
 
 #include "Windows.h"
@@ -33,6 +34,7 @@
     return { a.x * b.x, a.y * b.y };
 }
 
+//bool FindNUmberInVector(std::vector<PlatformSettings>& platformSettings, const s32 index, const s32 val)
 bool FindNumberInVector(const std::vector<s32>& data, const s32 val)
 {
     for (s32 i = 0; i < data.size(); i++)
@@ -43,6 +45,7 @@ bool FindNumberInVector(const std::vector<s32>& data, const s32 val)
     return false;
 }
 
+//void FindNUmberInVector(std::vector<PlatformSettings>& platformSettings, const s32 index, const s32 val)
 void RemoveNumberInVector(std::vector<s32>& data, const s32 val)
 {
     std::erase_if(data,
@@ -626,6 +629,8 @@ int main(int, char**)
                     ZoneScopedN("Grouping");
                     ImGui::Text("Platform Selection");
                     ImGui::SameLine();
+                    HelpMarker("input build platforms you want, i.e. \"XSX\" or \"win32\" just without the quotes and only one per entry");
+                    ImGui::SameLine();
                     ImGui::SetNextItemWidth(150);
                     ImGui::Combo("##Platform Selection", &settings.platformSelection, GetCStringFromPlatformSettings,
                         &settings.platformOptions, (s32)settings.platformOptions.size());
@@ -637,6 +642,8 @@ int main(int, char**)
                     }
 
                     ImGui::Text("Version Selection");
+                    ImGui::SameLine();
+                    HelpMarker("input versions you want to build, i.e. \"Test\" or \"Development\" just without the quotes and only one per entry");
                     ImGui::SameLine();
                     static std::string versionInputName;
                     if (NameStatusButtonAdd("Version", versionInputName, __LINE__))
@@ -654,7 +661,9 @@ int main(int, char**)
                         float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
                         if (next_button_x2 < window_visible_x2)
                             ImGui::SameLine(0, 1);
-                        bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
+
+                        bool found = (settings.platformSelection < settings.platformOptions.size()) ? FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i) : false;
+                        //bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
                         bool checkbox = found;
                         ImGui::Checkbox(settings.versionOptions[i].c_str(), &checkbox);
                         if (checkbox != found)
@@ -662,7 +671,10 @@ int main(int, char**)
                             if (found)
                                 RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
                             else
-                                settings.platformOptions[settings.platformSelection].enabledVersions.push_back(i);
+                            {
+                                if (settings.platformSelection < settings.platformOptions.size())
+                                    settings.platformOptions[settings.platformSelection].enabledVersions.push_back(i);
+                            }
                         }
                         last_button_x2 = ImGui::GetItemRectMax().x;
                     }
@@ -677,6 +689,8 @@ int main(int, char**)
                 {
                     ZoneScopedN("Switches");
                     TextCentered("Switch Selection");
+                    ImGui::SameLine();
+                    HelpMarker("Added switches for build here, excluding the starting \"-\"(dash)");
                     ImGui::NewLine();
                     float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
                     float last_button_x2 = 0;
@@ -687,17 +701,21 @@ int main(int, char**)
                         float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
                         if (next_button_x2 < window_visible_x2)
                             ImGui::SameLine(0, 1);
-                        bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
-                        bool checkbox = found;
-                        ImGui::Checkbox(settings.switchOptions[i].c_str(), &checkbox);
-                        if (checkbox != found)
-                        {
-                            if (found)
-                                RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
-                            else
-                                settings.platformOptions[settings.platformSelection].enabledSwitches.push_back(i);
-                        }
-                        last_button_x2 = ImGui::GetItemRectMax().x;
+                        
+                            bool found = (settings.platformSelection < settings.platformOptions.size()) ? FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i) : false;
+                            bool checkbox = found;
+                            ImGui::Checkbox(settings.switchOptions[i].c_str(), &checkbox);
+                            if (checkbox != found)
+                            {
+                                if (found)
+                                    RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
+                                else
+                                {
+                                    if (settings.platformSelection < settings.platformOptions.size())
+                                        settings.platformOptions[settings.platformSelection].enabledSwitches.push_back(i);
+                                }
+                            }
+                            last_button_x2 = ImGui::GetItemRectMax().x;
                     }
                     static std::string name;
                     if (NameStatusButtonAdd("Switch", name, __LINE__))
@@ -714,6 +732,8 @@ int main(int, char**)
                 {
                     //ZoneScopedN("Building");
                     TextCentered("Build Events");
+                    ImGui::SameLine();
+                    HelpMarker("Add programs to be ran before or after the build");
 
                     static std::string preBuildInput;
                     if (settings.platformOptions.size())
