@@ -13,6 +13,5 @@
 * Build/run from there
 
 ### TODO
-- [X] Add popup to save when closing
 - [ ] Convert to GLFW to remove the dependancy on dlls
-- [X] Track when changes were made to config to properly notify to save
+- [X] Fix high core usage ALL the time

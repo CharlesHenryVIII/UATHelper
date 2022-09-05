@@ -424,7 +424,8 @@ int main(int, char**)
     SDL_Window* window = SDL_CreateWindow("UATHelper", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
     SDL_GLContext gl_context = SDL_GL_CreateContext(window);
     SDL_GL_MakeCurrent(window, gl_context);
-    SDL_GL_SetSwapInterval(1); // Enable vsync
+    //SDL_GL_SetSwapInterval(1); // Enable vsync
+    SDL_GL_SetSwapInterval(0); // Enable vsync
 
     Threading& threading = Threading::GetInstance();
     // Setup Dear ImGui context
@@ -490,6 +491,8 @@ int main(int, char**)
     bool exitProgram = false;
     bool modifiedSettings = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+    float ups = 144.0f; //updates per second
+    u64 frameStartTicks = 0;
 
     // Main loop
     bool done = false;
@@ -497,6 +500,7 @@ int main(int, char**)
     {
         {
             ZoneScopedN("Frame Update:");
+            frameStartTicks = SDL_GetTicks64();
             // Poll and handle events (inputs, window resize, etc.)
             // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
             // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
@@ -510,7 +514,6 @@ int main(int, char**)
                     exitProgram = true;
                 if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window))
                     exitProgram = true;
-                //done = true;
             }
 
             // Start the Dear ImGui frame
@@ -830,7 +833,7 @@ int main(int, char**)
                     }
                     if (buildRunning || commandLineInvalid)
                         ImGui::EndDisabled();
-                    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+                    ImGui::Text("Application average %.3f ms/frame (%.1f FPS, Target: %.1f FPS)", 1000.0f / io.Framerate, io.Framerate, ups);
                 }
                 ImGui::EndChild();
 
@@ -915,6 +918,12 @@ int main(int, char**)
             ZoneScopedN("Frame End");
             SDL_GL_SwapWindow(window);
         }
+        FrameMark;
+        u64 frameEndTicks = SDL_GetTicks64();
+        float MSPerUpdate = ((1.0f / ups) * 1000.0f);
+        u64 delayAmount = (u64)((u64)MSPerUpdate - (frameEndTicks - frameStartTicks));
+        u64 clamped = Clamp<u64>(delayAmount, 0, (u64)MSPerUpdate);
+        SDL_Delay((u32)clamped);
     }
 
     // Cleanup
