@@ -280,6 +280,17 @@ bool SeperatePathAndArguments(const std::string& input, std::string& path, std::
         if (input[i] == charSeperator)
             break;
     }
+#if 0
+    //NOTE(CSH): finding if there is an included name without a '-' after the exe name.
+    //This needs to be included in the path not the args
+    if (charSeperator == ' ')
+    {
+        for (; i < input.size() && input[i] != '-'; i++)
+        { }
+        if (input[i] == '-')
+            i--;
+    }
+#endif
     s32 maxValue = Min<s32>((s32)input.size(), i + 1);
     path = input.substr(0,          maxValue);
     if (maxValue == input.size())
@@ -292,17 +303,37 @@ bool SeperatePathAndArguments(const std::string& input, std::string& path, std::
     return true;
 }
 
-void RunProcess(const std::string& name, Threading& thread)
+void WrapInQuotes(std::string& s)
 {
-    std::string path;
+    if (s.size())
+    {
+        if (s[0] != '\"')
+            s = '\"' + s;
+        if (s[s.size() - 1] != '\"')
+            s = s + '\"';
+    }
+}
+
+void RunProcess(const std::string& name, Threading& thread)//, bool keepAlive)
+{
+    //TODO: Make this function and surrounding code more robust
+
+    if (name.size() < 2)
+    {
+        ShowErrorWindow("RunProcess Error", "Trying to run process with path.size() < 2");
+        assert(false);
+        return;
+    }
+
     std::string args;
-    SeperatePathAndArguments(name, path, args);
-    RemoveStartAndEndSpaces(path);
-    if (args.size())
-        RemoveStartAndEndSpaces(args);
+    args.clear();
+    if (!(name[0] == '/' && (name[1] == 'c' || name[1] == 'K')))
+        args = "/c";
+    args = '\"' + args + name + '\"';
+
     StartProcessJob* job = new StartProcessJob();
-    job->applicationPath = path;
     job->arguments = args;
+
     thread.SubmitJob(job);
 }
 
@@ -355,6 +386,27 @@ bool GetCStringFromThemes(void* data, int idx, const char** out_text)
     const Theme* d = (Theme*)data;
     *out_text = d[idx].name;
     return true;
+}
+
+void OpenModifyingPrompt(std::string& s)
+{
+    if (ImGui::BeginPopupContextItem())
+    {
+        ImGui::BeginDisabled();
+        if (ImGui::Selectable("Edit"))
+        {
+            
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndDisabled();
+
+        if (ImGui::Selectable("Delete"))
+        {
+            s.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 
@@ -466,7 +518,7 @@ int main(int, char**)
     //return 0;
     std::string finalCommandLine;
     bool buildRunning = false;
-    bool rebuildCommandline = true;
+
 
     //ImFont* mainFont = io.Fonts->AddFontFromFileTTF("Assets/DroidSans.ttf", 16);
     //io.Fonts->Build();
@@ -490,6 +542,7 @@ int main(int, char**)
     bool show_demo_window = false;
     bool exitProgram = false;
     bool modifiedSettings = false;
+    bool keepProcessWindowAlive = true;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     float ups = 144.0f; //updates per second
     u64 frameStartTicks = 0;
@@ -521,8 +574,12 @@ int main(int, char**)
             ImGui_ImplSDL2_NewFrame();
             ImGui::NewFrame();
             //ImGui::PushFont(mainFont);
+#if 1
+            buildRunning = threading.GetJobsInFlight();
+#else
             if (!threading.GetJobsInFlight())
                 buildRunning = false;
+#endif
 
             if (!modifiedSettings)
                 modifiedSettings = !ConfigIsSameAsLastLoad(settings);
@@ -574,7 +631,10 @@ int main(int, char**)
                     {
                         ZoneScopedN("Config");
                         if (ImGui::MenuItem("Save Config", "Ctrl+S"))
+                        {
                             SaveConfig(settings);
+                            modifiedSettings = false;
+                        }
                         if (ImGui::MenuItem("Load Config", "Ctrl+L"))
                             LoadConfig(settings);
                         if (ImGui::MenuItem("Clear Config"))
@@ -606,12 +666,14 @@ int main(int, char**)
 
                     ImGui::Text("Main Directory");
                     ImGui::SameLine();
-                    std::string demoMainDir = "C:/UnrealEngine/Project";
+                    std::string demoMainDir = "C:/UnrealEngine/Project/";
                     HelpMarker(demoMainDir);
                     ImGui::SameLine();
                     ImGui::PushItemWidth(-FLT_MIN);
                     InputTextDynamicSize("##" + demoMainDir, settings.rootPath);
                     CleanPathString(settings.rootPath);
+                    if (settings.rootPath[settings.rootPath.size() - 1] != '/')
+                        settings.rootPath = settings.rootPath + '/';
 
                     ImGui::Text("Path to .uproject");
                     std::string demoProjectPath = "C:/UnrealEngine/Project/Title/title.uproject";
@@ -660,6 +722,7 @@ int main(int, char**)
                     ImGuiStyle& style = ImGui::GetStyle();
                     for (int i = 0; i < settings.versionOptions.size(); i++)
                     {
+                        //if youre hovering over it
                         float button_szx = ImGui::CalcTextSize(settings.versionOptions[i].c_str()).x + 2 * style.FramePadding.x;
                         float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
                         if (next_button_x2 < window_visible_x2)
@@ -700,25 +763,30 @@ int main(int, char**)
                     ImGuiStyle& style = ImGui::GetStyle();
                     for (int i = 0; i < settings.switchOptions.size(); i++)
                     {
+                        if (!settings.switchOptions[i].size())
+                            continue;
+
                         float button_szx = ImGui::CalcTextSize(settings.switchOptions[i].c_str()).x + 2 * style.FramePadding.x;
                         float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
                         if (next_button_x2 < window_visible_x2)
                             ImGui::SameLine(0, 1);
                         
-                            bool found = (settings.platformSelection < settings.platformOptions.size()) ? FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i) : false;
-                            bool checkbox = found;
-                            ImGui::Checkbox(settings.switchOptions[i].c_str(), &checkbox);
-                            if (checkbox != found)
+                        bool found = (settings.platformSelection < settings.platformOptions.size()) ? FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i) : false;
+                        bool checkbox = found;
+                        ImGui::Checkbox(settings.switchOptions[i].c_str(), &checkbox);
+                        if (checkbox != found)
+                        {
+                            if (found)
+                                RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
+                            else
                             {
-                                if (found)
-                                    RemoveNumberInVector(settings.platformOptions[settings.platformSelection].enabledSwitches, i);
-                                else
-                                {
-                                    if (settings.platformSelection < settings.platformOptions.size())
-                                        settings.platformOptions[settings.platformSelection].enabledSwitches.push_back(i);
-                                }
+                                if (settings.platformSelection < settings.platformOptions.size())
+                                    settings.platformOptions[settings.platformSelection].enabledSwitches.push_back(i);
                             }
-                            last_button_x2 = ImGui::GetItemRectMax().x;
+                        }
+                        last_button_x2 = ImGui::GetItemRectMax().x;
+
+                        OpenModifyingPrompt(settings.switchOptions[i]);
                     }
                     static std::string name;
                     if (NameStatusButtonAdd("Switch", name, __LINE__))
@@ -785,9 +853,14 @@ int main(int, char**)
                     }
                     else
                     {
+                        //finalCommandLine += "\"";
+                        if (keepProcessWindowAlive)
+                            finalCommandLine += "/K ";
+                        else
+                            finalCommandLine += "/c ";
                         finalCommandLine += settings.rootPath.c_str();
-                        finalCommandLine += "Engine/Build/BatchFiles/RunUAT.bat BuildCookRun ";
-                        finalCommandLine += "-project=";
+                        finalCommandLine += "Engine/Build/BatchFiles/RunUAT.bat BuildCookRun";
+                        finalCommandLine += " -project=";
                         finalCommandLine += settings.projectPath.c_str();
                         finalCommandLine += " -targetplatform=";
                         finalCommandLine += settings.platformOptions[settings.platformSelection].name;
@@ -819,20 +892,23 @@ int main(int, char**)
                     ImGui::SameLine();
                     if (buildRunning || commandLineInvalid)
                         ImGui::BeginDisabled();
-                    if (ImGui::Button("RUN"))
+                    bool runButtonHit = ImGui::Button("RUN");
+                    if (runButtonHit)
                     {
                         RunProcessList(settings.preBuildEvents,
                             settings.platformOptions[settings.platformSelection].enabledPreBuild,
                             threading);
-#if NDEBUG
+//#if NDEBUG
                         RunProcess(finalCommandLine, threading);
-#endif
+//#endif
                         RunProcessList(settings.postBuildEvents,
                             settings.platformOptions[settings.platformSelection].enabledPostBuild,
                             threading);
                     }
                     if (buildRunning || commandLineInvalid)
                         ImGui::EndDisabled();
+                    ImGui::Checkbox("Keep UAT CMD Window Open", &keepProcessWindowAlive);
+
                     ImGui::Text("Application average %.3f ms/frame (%.1f FPS, Target: %.1f FPS)", 1000.0f / io.Framerate, io.Framerate, ups);
                 }
                 ImGui::EndChild();

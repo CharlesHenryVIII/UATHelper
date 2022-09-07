@@ -7,6 +7,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <shellapi.h>
+#include <combaseapi.h>
 
 std::string ToString(const char* fmt, ...)
 {
@@ -20,53 +21,54 @@ std::string ToString(const char* fmt, ...)
 
 void RunProcess(const char* applicationPath, const char* arguments)
 {
-    LPSTR lpApplicationPath = const_cast<char*>(applicationPath);
-    LPSTR lpCommandLine = const_cast<char*>(arguments);
-
-    DWORD newProcessFlags = CREATE_NEW_CONSOLE | NORMAL_PRIORITY_CLASS;
-
-    STARTUPINFOA startupInfo;
-    ZeroMemory(&startupInfo, sizeof(startupInfo));
-    startupInfo.dwFlags = STARTF_USESHOWWINDOW;
-    startupInfo.wShowWindow = SW_SHOWDEFAULT; //SW_MINIMIZE
-    startupInfo.cb = sizeof(startupInfo);
-
-    _PROCESS_INFORMATION pi = {};
-    DEFER{
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    };
     //TODO: Allow this to work for ASCII AND Unicode
-    if (!CreateProcess(
-        lpApplicationPath,  //LPCSTR                  lpApplicationName,
-        lpCommandLine,      //LPSTR                   lpCommandLine,
-        NULL,               //LPSECURITY_ATTRIBUTES   lpProcessAttributes,
-        NULL,               //LPSECURITY_ATTRIBUTES   lpThreadAttributes,
-        true,               //BOOL                    bInheritHandles,
-        newProcessFlags,    //DWORD                   dwCreationFlags,
-        NULL,               //LPVOID                  lpEnvironment,
-        NULL,               //LPCSTR                  lpCurrentDirectory,
-        &startupInfo,       //LPSTARTUPINFOA          lpStartupInfo,
-        &pi                 //LPPROCESS_INFORMATION   lpProcessInformation
-    ))
+    SHELLEXECUTEINFO info = {};
+    info.cbSize = sizeof(SHELLEXECUTEINFO);
+    info.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
+    info.hwnd;
+    info.lpVerb = "open";
+    info.lpFile = "cmd.exe";
+    info.lpParameters = arguments;
+    info.lpDirectory = NULL;
+    info.nShow = SW_SHOW;
+    info.hInstApp = NULL; //out
+    info.lpIDList;
+    info.lpClass;
+    info.hkeyClass;
+    info.dwHotKey;
+    info.hProcess; //out
+
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    DEFER { CloseHandle(info.hProcess); };
+    if (!ShellExecuteEx(&info))
     {
-        
-        std::string errorBoxTitle = ToString("Create Process Error: %i", GetLastError());
+        std::string errorBoxTitle = ToString("ShellExecuteEx Error: %i", GetLastError());
         std::string errorText     = ToString("Application Path: %s\n"
                                              "Command Line Params: %s", applicationPath, arguments);
         ShowErrorWindow(errorBoxTitle, errorText);
+        assert(false);
         return;
     }
 
-    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD result = WaitForSingleObject(info.hProcess, INFINITE);
+    s32 bad = GetLastError();
+    if (result)
+    {
+        assert(false);
+    }
+    DWORD exitCode = {};
+    if (!GetExitCodeProcess(info.hProcess, &exitCode))
+    {
+        assert(false);
+    }
+
 }
 
 void StartProcessJob::RunJob()
 {
-    if (arguments.size())
-        RunProcess(applicationPath.c_str(), arguments.c_str());
-    else
-        RunProcess(applicationPath.c_str(), nullptr);
+    const char* path = applicationPath.size()   ? applicationPath.c_str()   : nullptr;
+    const char* args = arguments.size()         ? arguments.c_str()         : nullptr;
+    RunProcess(path, args);
 }
 
 HICON icon;

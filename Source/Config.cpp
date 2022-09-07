@@ -48,10 +48,27 @@ void SortConfig(Settings& set)
 }
 
 
+void RemoveNullStrings(const std::vector<std::string>& strings, std::vector<s32>& vals)
+{
+    std::erase_if(vals,
+        [strings](s32 val)
+        {
+            return strings[val].empty();
+        });
+}
+void RemoveNullStrings(std::vector<std::string>& strings)
+{
+    std::erase_if(strings,
+        [](std::string& s)
+        {
+            return s.empty();
+        });
+}
 void AddParentAndChildrenInt(nlohmann::json& root, const std::string& option, std::vector<s32>& data, const std::vector<std::string>& names)
 {
     if (!data.size())
         return;
+    RemoveNullStrings(names, data);
     for (s32 i = 0; i < data.size(); i++)
     {
 #if 1
@@ -73,10 +90,6 @@ void SaveConfig(Settings& settings)
     j[styleSelectionText]       = settings.styleSelection;
     j[rootPathText]             = settings.rootPath;
     j[projectPathText]          = settings.projectPath;
-    j[versionOptionsText]       = settings.versionOptions;
-    j[switchOptionsText]        = settings.switchOptions;
-    j[preBuildEventsText]       = settings.preBuildEvents;
-    j[postBuildEventsText]      = settings.postBuildEvents;
 
     for (s32 i = 0; i < settings.platformOptions.size(); i++)
     {
@@ -87,6 +100,16 @@ void SaveConfig(Settings& settings)
         AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledPostBuildName,    set.enabledPostBuild,    settings.postBuildEvents);
     }
 
+    RemoveNullStrings(settings.versionOptions);
+    RemoveNullStrings(settings.switchOptions);
+    RemoveNullStrings(settings.preBuildEvents);
+    RemoveNullStrings(settings.postBuildEvents);
+    j[versionOptionsText]       = settings.versionOptions;
+    j[switchOptionsText]        = settings.switchOptions;
+    j[preBuildEventsText]       = settings.preBuildEvents;
+    j[postBuildEventsText]      = settings.postBuildEvents;
+
+    fileSettings = settings;
 
     std::ofstream o(configFileName);
     o << std::setw(4) << j << std::endl;
