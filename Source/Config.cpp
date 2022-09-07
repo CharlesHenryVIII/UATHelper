@@ -160,7 +160,7 @@ void ValidateLoadConfig(Settings& settings)
 
 bool LoadConfig(Settings& settings)
 {
-    settings = {};
+    fileSettings = {};
     std::ifstream file(configFileName);
     if (file.fail())
         return false;
