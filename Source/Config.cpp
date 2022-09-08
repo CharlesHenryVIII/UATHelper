@@ -305,26 +305,11 @@ bool LoadConfig(Settings& settings)
             return false;
     }
 
-#if 1
     GetTypeFromValid<s32>(          j, platformSelectionText,  fileSettings.platformSelection);
     GetTypeFromValid<s32>(          j, colorSelectionText,     fileSettings.colorSelection);
     GetTypeFromValid<s32>(          j, styleSelectionText,     fileSettings.styleSelection);
     GetTypeFromValid<std::string>(  j, rootPathText,           fileSettings.rootPath);
     GetTypeFromValid<std::string>(  j, projectPathText,        fileSettings.projectPath);
-#else
-#define NOT_NULL_AND_DO_THING(root, name, type, var) \
-    if (!root[name].is_null()) \
-    {\
-        var = j[name].get<type>();\
-    }\
-    nullptr
-
-    NOT_NULL_AND_DO_THING(j, platformSelectionText, s32,            fileSettings.platformSelection);
-    NOT_NULL_AND_DO_THING(j, colorSelectionText,    s32,            fileSettings.colorSelection);
-    NOT_NULL_AND_DO_THING(j, styleSelectionText,    s32,            fileSettings.styleSelection);
-    NOT_NULL_AND_DO_THING(j, rootPathText,          std::string,    fileSettings.rootPath);
-    NOT_NULL_AND_DO_THING(j, projectPathText,       std::string,    fileSettings.projectPath);
-#endif
 
     GetChildrenString(j, versionOptionsText,   fileSettings.versionOptions);
     GetChildrenString(j, switchOptionsText,    fileSettings.switchOptions);
@@ -476,21 +461,6 @@ bool ConfigIsSameAsLastLoad(const Settings& s)
 if (s. ## __member != fileSettings. ## __member)\
     return false
 
-#define ARRCMP(__a, __b)                                        \
-do {                                                            \
-    if (__a ## .size() != __b ## .size())                       \
-    {                                                           \
-        return false;                                           \
-    }                                                           \
-    else                                                        \
-    {                                                           \
-            for (s32 index = 0; index < __a ## .size(); index++)\
-            {                                                   \
-                 if (__a ## [index] != __b ## [index])\
-                    return false;                               \
-            }}}                                                 \
-while (0)
-
 #define CHILDCMP(__index, __member)                      \
 if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__index]. ## __member)\
     return false
@@ -514,10 +484,10 @@ if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__in
         for (s32 i = 0; i < s.platformOptions.size(); i++)
         {
             CHILDCMP(i, name);
-            ArraysAreTheSame(s.platformOptions[i].enabledVersions, s.versionOptions, fileSettings.platformOptions[i].enabledVersions, fileSettings.versionOptions);
-            ArraysAreTheSame(s.platformOptions[i].enabledSwitches, s.switchOptions, fileSettings.platformOptions[i].enabledSwitches, fileSettings.switchOptions);
-            ArraysAreTheSame(s.platformOptions[i].enabledPreBuild, s.preBuildEvents, fileSettings.platformOptions[i].enabledPreBuild, fileSettings.preBuildEvents);
-            ArraysAreTheSame(s.platformOptions[i].enabledPostBuild, s.postBuildEvents, fileSettings.platformOptions[i].enabledPostBuild, fileSettings.postBuildEvents);
+            ArraysAreTheSame(s.platformOptions[i].enabledVersions,  s.versionOptions,   fileSettings.platformOptions[i].enabledVersions,    fileSettings.versionOptions );
+            ArraysAreTheSame(s.platformOptions[i].enabledSwitches,  s.switchOptions,    fileSettings.platformOptions[i].enabledSwitches,    fileSettings.switchOptions  );
+            ArraysAreTheSame(s.platformOptions[i].enabledPreBuild,  s.preBuildEvents,   fileSettings.platformOptions[i].enabledPreBuild,    fileSettings.preBuildEvents );
+            ArraysAreTheSame(s.platformOptions[i].enabledPostBuild, s.postBuildEvents,  fileSettings.platformOptions[i].enabledPostBuild,   fileSettings.postBuildEvents);
         }
     }
 

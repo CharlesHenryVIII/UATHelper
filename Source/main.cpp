@@ -640,6 +640,7 @@ int main(int, char**)
                         if (ImGui::MenuItem("Save Config", "Ctrl+S"))
                         {
                             SaveConfig(settings);
+                            LoadConfig(settings);//clear any out of bounds indices
                             modifiedSettings = false;
                         }
                         if (ImGui::MenuItem("Load Config", "Ctrl+L"))
@@ -729,6 +730,8 @@ int main(int, char**)
                     ImGuiStyle& style = ImGui::GetStyle();
                     for (int i = 0; i < settings.versionOptions.size(); i++)
                     {
+                        if (settings.versionOptions[i].empty())
+                            continue;
                         //if youre hovering over it
                         float button_szx = ImGui::CalcTextSize(settings.versionOptions[i].c_str()).x + 2 * style.FramePadding.x;
                         float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
@@ -736,7 +739,6 @@ int main(int, char**)
                             ImGui::SameLine(0, 1);
 
                         bool found = (settings.platformSelection < settings.platformOptions.size()) ? FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i) : false;
-                        //bool found = FindNumberInVector(settings.platformOptions[settings.platformSelection].enabledVersions, i);
                         bool checkbox = found;
                         ImGui::Checkbox(settings.versionOptions[i].c_str(), &checkbox);
                         if (checkbox != found)
@@ -750,9 +752,8 @@ int main(int, char**)
                             }
                         }
                         last_button_x2 = ImGui::GetItemRectMax().x;
+                        OpenModifyingPrompt(settings.versionOptions[i]);
                     }
-
-
                 }
                 ImGui::EndChild();
 
@@ -875,6 +876,8 @@ int main(int, char**)
                         bool alreadyOneEnabled = false;
                         for (const auto& optionIndex : settings.platformOptions[settings.platformSelection].enabledVersions)
                         {
+                            if (settings.versionOptions[optionIndex].empty())
+                                continue;
                             if (alreadyOneEnabled)
                                 finalCommandLine += "+";
                             finalCommandLine += settings.versionOptions[optionIndex];
