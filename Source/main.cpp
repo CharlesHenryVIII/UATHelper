@@ -155,7 +155,7 @@ void RemoveStartAndEndSpaces(std::string& s)
     }
 }
 
-void ExecutionSection(const std::string& sectionTitle, std::vector<std::string>& names, std::vector<s32>& enables, std::string& inputString)
+void ExecutionSection(const std::string& sectionTitle, BuildEvents& be, std::vector<s32>& enables, std::string& inputString)
 {
     std::string sectionTitleEvents = sectionTitle + " Events:";
     //ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
@@ -171,10 +171,10 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<std::string>&
         if (inputSuccess)
         {
             RemoveStartAndEndSpaces(inputString);
-            names.push_back({ inputString });
+            be.Add(inputString);
             inputString.clear();
         }
-        if (names.size() == 0)
+        if (be.m_events.size() == 0)
             return;
 
 
@@ -194,18 +194,19 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<std::string>&
         //capping the height at 5 so you can see the top row while scrolling horizontally
         //TODO: change the max height to varry with the size of the child window
         const int maxTableHeight = 5;
-        ImVec2 tableSize = ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * (Min(maxTableHeight, (int)names.size()) + 1)); 
+        ImVec2 tableSize = ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * (Min(maxTableHeight, (int)be.m_events.size()) + 1)); 
         const int tableColumnCount = 2;
         if (ImGui::BeginTable("table_advanced", tableColumnCount, tableFlags, tableSize, 0.0f))
         {
             DEFER{ ImGui::EndTable(); };
 
             const ImGuiTableColumnFlags columnFlags = ImGuiTableColumnFlags_WidthFixed;
-            assert(names.size());
             float longestText = 0;
-            for (const auto& item : names)
+            for (const auto& item : be.m_events)
             {
-                ImVec2 textSize = ImGui::CalcTextSize(item.c_str());
+                if (item.name.empty())
+                    continue;
+                ImVec2 textSize = ImGui::CalcTextSize(item.name.c_str());
                 longestText = Max(longestText, textSize.x);
             }
             ImGui::TableSetupScrollFreeze(1, 0);
@@ -214,11 +215,13 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<std::string>&
 
             //ImGui::PushButtonRepeat(true);
             {
-                for (int row_n = 0; row_n < names.size(); row_n++)
+                for (int row_n = 0; row_n < be.m_events.size(); row_n++)
                 {
-                    auto item = names[row_n];
+                    if (be.m_events[row_n].name.empty())
+                        continue;
+                    auto item = be.m_events[row_n];
 
-                    ImGui::PushID(item.c_str());
+                    ImGui::PushID(item.name.c_str());
                     DEFER{ ImGui::PopID(); };
 
                     ImGui::TableNextRow(ImGuiTableRowFlags_None, 0);
@@ -226,7 +229,7 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<std::string>&
                     {
                         std::string buttonLabel = "Disabled";
                         float color = 0.0f;
-                        const bool enabled = FindNumberInVector(enables, row_n);
+                        const bool enabled = FindNumberInVector(enables, item.id);
                         if (enabled)
                         {
                             color = 2.0f / 7.0f;
@@ -239,9 +242,9 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<std::string>&
                         if (ImGui::SmallButton(buttonLabel.c_str()))
                         {
                             if (enabled)
-                                RemoveNumberInVector(enables, row_n);
+                                RemoveNumberInVector(enables, item.id);
                             else
-                                enables.push_back(row_n);
+                                enables.push_back(item.id);
                         }
                         ImGui::PopStyleColor(3);
                     }
@@ -249,14 +252,14 @@ void ExecutionSection(const std::string& sectionTitle, std::vector<std::string>&
 
                     ImGui::TableSetColumnIndex(1);
                     ImGuiSelectableFlags selectable_flags = ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowItemOverlap;
-                    ImGui::Selectable(item.c_str(), false, selectable_flags, ImVec2(0, 0));
+                    ImGui::Selectable(item.name.c_str(), false, selectable_flags, ImVec2(0, 0));
                     if (ImGui::IsItemActive() && !ImGui::IsItemHovered())
                     {
                         int nextIndex = row_n + (ImGui::GetMouseDragDelta(0).y < 0.f ? -1 : 1);
-                        if (nextIndex >= 0 && nextIndex < names.size())
+                        if (nextIndex >= 0 && nextIndex < be.m_events.size())
                         {
-                            names[row_n] = names[nextIndex];
-                            names[nextIndex] = item;
+                            be.m_events[row_n] = be.m_events[nextIndex];
+                            be.m_events[nextIndex] = item;
                             ImGui::ResetMouseDragDelta();
                         }
                     }
@@ -337,11 +340,15 @@ void RunProcess(const std::string& name, Threading& thread)//, bool keepAlive)
     thread.SubmitJob(job);
 }
 
-void RunProcessList(const std::vector<std::string>& names, const std::vector<s32>& enabledInts, Threading& thread)
+void RunProcessList(const BuildEvents& be, const std::vector<s32>& enabledIDs, Threading& thread)
 {
-    for (s32 i = 0; i < enabledInts.size(); i++)
+    for (s32 i = 0; i < enabledIDs.size(); i++)
     {
-        RunProcess(names[enabledInts[i]], thread);
+        BuildEvent b;
+        if (be.Get(b, enabledIDs[i]))
+        {
+            RunProcess(b.name, thread);
+        }
     }
 }
 

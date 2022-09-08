@@ -13,6 +13,21 @@ struct PlatformSettings {
     std::vector<s32> enabledPostBuild;
 };
 
+struct BuildEvent {
+    s32 id = {};
+    std::string name;
+};
+
+struct BuildEvents {
+    std::vector<BuildEvent> m_events;
+
+    void RemoveNullElements();
+    bool Get(s32& index, const std::string& s) const; 
+    bool Get(BuildEvent& out, const s32 id) const;
+    bool Get(BuildEvent& out, const std::string& s) const;
+    BuildEvent* Add(const std::string& name);
+};
+
 struct Settings {
     s32 platformSelection = 0;
     s32 colorSelection = {};
@@ -26,8 +41,8 @@ struct Settings {
 #endif
     std::vector<std::string> versionOptions;
     std::vector<std::string> switchOptions;
-    std::vector<std::string> preBuildEvents;
-    std::vector<std::string> postBuildEvents;
+    BuildEvents preBuildEvents;
+    BuildEvents postBuildEvents;
     std::vector<PlatformSettings> platformOptions;
 };
 

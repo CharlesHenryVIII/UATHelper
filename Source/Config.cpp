@@ -19,13 +19,76 @@ const char* postBuildEventsText     = "Post Build Events";
 const char* platformOptionsText     = "Platform Settings";
 const char* versionText             = "Version";
 const char* enabledVersionsText     = "Enabled Versions";
-const char* enabledSwitchesName     = "Enabled Switches";
-const char* enabledPreBuildName     = "Enabled Pre Build";
-const char* enabledPostBuildName    = "Enabled Post Build";
+const char* enabledSwitchesText     = "Enabled Switches";
+const char* enabledPreBuildText     = "Enabled Pre Build";
+const char* enabledPostBuildText    = "Enabled Post Build";
 const s32 currentVersion = 1;
 
 Settings fileSettings;
 
+
+void BuildEvents::RemoveNullElements()
+{
+    std::erase_if(m_events,
+        [](const BuildEvent& be)
+        {
+            return be.name.empty();
+        });
+}
+BuildEvent* BuildEvents::Add(const std::string& name)
+{
+    static s32 buildEventID = {};
+    BuildEvent be;
+    be.id = ++buildEventID;
+    be.name = name;
+    m_events.push_back(be);
+    return &m_events[m_events.size() - 1];
+}
+
+//s32 FindStringInArray(const std::string& s, const std::vector<BuildEvent>& data)
+bool BuildEvents::Get(s32& out_index, const std::string& s) const
+{
+    for (s32 i = 0; i < m_events.size(); i++)
+    {
+        if (m_events[i].name == s)
+        {
+            out_index = i;
+            return true;
+        }
+    }
+    return false;
+}
+//bool GetStringFromArray(std::string& out, const std::vector<BuildEvent>& events, const s32 id)
+bool BuildEvents::Get(BuildEvent& out, const s32 id) const
+{
+    out.id = {};
+    out.name.clear();
+    for (s32 i = 0; i < m_events.size(); i++)
+    {
+        if (m_events[i].id == id)
+        {
+            out.id      = m_events[i].id;
+            out.name    = m_events[i].name;
+            return true;
+        }
+    }
+    return false;
+}
+bool BuildEvents::Get(BuildEvent& out, const std::string& s) const
+{
+    out.id = {};
+    out.name.clear();
+    for (s32 i = 0; i < m_events.size(); i++)
+    {
+        if (m_events[i].name == s)
+        {
+            out.id      = m_events[i].id;
+            out.name    = m_events[i].name;
+            return true;
+        }
+    }
+    return false;
+}
 
 s32 ComparisonFunction(const void* a, const void* b)
 {
@@ -64,6 +127,31 @@ void RemoveNullStrings(std::vector<std::string>& strings)
             return s.empty();
         });
 }
+void RemoveNullIDs(std::vector<s32>& IDs, const BuildEvents& be)
+{
+    std::erase_if(IDs,
+        [be](s32& id)
+        {
+            BuildEvent b;
+            if (be.Get(b, id))
+            {
+                return b.name.empty();
+            }
+            return true;
+        });
+}
+void AddParentAndChildrenInt(nlohmann::json& root, const std::string& option, std::vector<s32>& IDs, const BuildEvents& be)
+{
+    if (!IDs.size())
+        return;
+    RemoveNullIDs(IDs, be);
+    BuildEvent b;
+    for (s32 i = 0; i < IDs.size(); i++)
+    {
+        if (be.Get(b, IDs[i]))
+            root[option].push_back(b.name);
+    }
+}
 void AddParentAndChildrenInt(nlohmann::json& root, const std::string& option, std::vector<s32>& data, const std::vector<std::string>& names)
 {
     if (!data.size())
@@ -71,12 +159,14 @@ void AddParentAndChildrenInt(nlohmann::json& root, const std::string& option, st
     RemoveNullStrings(names, data);
     for (s32 i = 0; i < data.size(); i++)
     {
-#if 1
         root[option].push_back(names[data[i]]);
-#else
-        root[option].push_back(data[i]);
-        //root[i] = std::to_string(data[i]);
-#endif
+    }
+}
+void AddBuildEvents(nlohmann::json& j, const char* name, const BuildEvents& events)
+{
+    for (s32 i = 0; i < events.m_events.size(); i++)
+    {
+        j[name].push_back(events.m_events[i].name);
     }
 }
 void SaveConfig(Settings& settings)
@@ -94,20 +184,20 @@ void SaveConfig(Settings& settings)
     for (s32 i = 0; i < settings.platformOptions.size(); i++)
     {
         PlatformSettings& set = settings.platformOptions[i];
-        AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledVersionsText,      set.enabledVersions,     settings.versionOptions);
-        AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledSwitchesName,      set.enabledSwitches,     settings.switchOptions);
-        AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledPreBuildName,     set.enabledPreBuild,     settings.preBuildEvents);
-        AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledPostBuildName,    set.enabledPostBuild,    settings.postBuildEvents);
+        AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledVersionsText,      set.enabledVersions,    settings.versionOptions);
+        AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledSwitchesText,      set.enabledSwitches,    settings.switchOptions);
+        AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledPreBuildText,     set.enabledPreBuild,     settings.preBuildEvents);
+        AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledPostBuildText,    set.enabledPostBuild,    settings.postBuildEvents);
     }
 
     RemoveNullStrings(settings.versionOptions);
     RemoveNullStrings(settings.switchOptions);
-    RemoveNullStrings(settings.preBuildEvents);
-    RemoveNullStrings(settings.postBuildEvents);
-    j[versionOptionsText]       = settings.versionOptions;
-    j[switchOptionsText]        = settings.switchOptions;
-    j[preBuildEventsText]       = settings.preBuildEvents;
-    j[postBuildEventsText]      = settings.postBuildEvents;
+    settings.preBuildEvents.RemoveNullElements();
+    settings.postBuildEvents.RemoveNullElements();
+    j[versionOptionsText] = settings.versionOptions;
+    j[switchOptionsText]  = settings.switchOptions;
+    AddBuildEvents(j, preBuildEventsText,   settings.preBuildEvents);
+    AddBuildEvents(j, postBuildEventsText,  settings.postBuildEvents);
 
     fileSettings = settings;
 
@@ -120,8 +210,19 @@ void GetChildrenString(nlohmann::json& j, const std::string& name, std::vector<s
     if (!j[name].is_null())
         data = j[name];
 }
+void GetChildrenString(nlohmann::json& j, const std::string& name, BuildEvents& be)
+{
+    if (!j[name].is_null())
+    {
+        for (auto it = j[name].begin(); it != j[name].end(); it++)
+        {
+            be.Add(it.value().get<std::string>());
+        }
+    }
+}
 
-s32 FindStringInArray(const std::string s, std::vector<std::string> data)
+
+s32 FindStringInArray(const std::string& s, const std::vector<std::string>& data)
 {
     for (s32 i = 0; i < data.size(); i++)
     {
@@ -131,6 +232,28 @@ s32 FindStringInArray(const std::string s, std::vector<std::string> data)
     return INT_MAX;
 }
 
+void LoadPlatformSettingsChildren(const std::string& optionsName, const auto& src, std::vector<s32>& dest, const BuildEvents& be)
+{
+    if (src.contains(optionsName))
+    {
+        const auto& data = src[optionsName];
+        BuildEvent b;
+        for (auto it = data.begin(); it != data.end(); it++)
+        {
+            
+            const std::string& s = it.value();
+            if (be.Get(b, s))
+            {
+                dest.push_back(b.id);
+            }
+            else
+            {
+                assert(false);
+                ShowErrorWindow("String Not Found In Array", ToString("\'%s\' not found in \'%s\'", it.value().get<std::string>().c_str(), optionsName.c_str()));
+            }
+        }
+    }
+}
 void LoadPlatformSettingsChildren(const std::string& optionsName, const auto& src, std::vector<s32>& dest, const std::vector<std::string>& optionNames)
 {
     if (src.contains(optionsName))
@@ -158,6 +281,15 @@ void ValidateLoadConfig(Settings& settings)
     }
 }
 
+template <typename T>
+void GetTypeFromValid(const nlohmann::json& root, const char* name, T& var)
+{
+    if (!root[name].is_null()) 
+    {
+        var = root[name].get<T>();
+    }
+}
+
 bool LoadConfig(Settings& settings)
 {
     fileSettings = {};
@@ -173,6 +305,13 @@ bool LoadConfig(Settings& settings)
             return false;
     }
 
+#if 1
+    GetTypeFromValid<s32>(          j, platformSelectionText,  fileSettings.platformSelection);
+    GetTypeFromValid<s32>(          j, colorSelectionText,     fileSettings.colorSelection);
+    GetTypeFromValid<s32>(          j, styleSelectionText,     fileSettings.styleSelection);
+    GetTypeFromValid<std::string>(  j, rootPathText,           fileSettings.rootPath);
+    GetTypeFromValid<std::string>(  j, projectPathText,        fileSettings.projectPath);
+#else
 #define NOT_NULL_AND_DO_THING(root, name, type, var) \
     if (!root[name].is_null()) \
     {\
@@ -185,6 +324,7 @@ bool LoadConfig(Settings& settings)
     NOT_NULL_AND_DO_THING(j, styleSelectionText,    s32,            fileSettings.styleSelection);
     NOT_NULL_AND_DO_THING(j, rootPathText,          std::string,    fileSettings.rootPath);
     NOT_NULL_AND_DO_THING(j, projectPathText,       std::string,    fileSettings.projectPath);
+#endif
 
     GetChildrenString(j, versionOptionsText,   fileSettings.versionOptions);
     GetChildrenString(j, switchOptionsText,    fileSettings.switchOptions);
@@ -201,9 +341,9 @@ bool LoadConfig(Settings& settings)
             continue;
 
         LoadPlatformSettingsChildren(enabledVersionsText,    it.value(), po[po.size() - 1].enabledVersions,  fileSettings.versionOptions);
-        LoadPlatformSettingsChildren(enabledSwitchesName,    it.value(), po[po.size() - 1].enabledSwitches,  fileSettings.switchOptions);
-        LoadPlatformSettingsChildren(enabledPreBuildName,   it.value(), po[po.size() - 1].enabledPreBuild,  fileSettings.preBuildEvents);
-        LoadPlatformSettingsChildren(enabledPostBuildName,  it.value(), po[po.size() - 1].enabledPostBuild, fileSettings.postBuildEvents);
+        LoadPlatformSettingsChildren(enabledSwitchesText,    it.value(), po[po.size() - 1].enabledSwitches,  fileSettings.switchOptions);
+        LoadPlatformSettingsChildren(enabledPreBuildText,   it.value(), po[po.size() - 1].enabledPreBuild,  fileSettings.preBuildEvents);
+        LoadPlatformSettingsChildren(enabledPostBuildText,  it.value(), po[po.size() - 1].enabledPostBuild, fileSettings.postBuildEvents);
     }
 
     if (fileSettings.platformSelection >= fileSettings.platformOptions.size())
@@ -257,7 +397,78 @@ void ClearConfig(Settings& settings)
     settings = {};
 }
 
-
+bool ArraysAreTheSame(const std::vector<s32>& a, const BuildEvents& abes, const std::vector<s32>& b, const BuildEvents& bbes)
+{
+    if (a.size() != b.size())
+    {
+        return false;
+    }
+    else                                                        
+    {                                                           
+        BuildEvent abe;
+        BuildEvent bbe;
+        for (s32 i = 0; i < a.size(); i++)
+        {
+            abe.name.clear();
+            bbe.name.clear();
+            if (!abes.Get(abe, a[i]))
+                return false;
+            if (!bbes.Get(bbe, b[i]))
+                return false;
+            if (abe.name != bbe.name)
+                return false;
+        }
+    }
+    return true;
+}
+bool ArraysAreTheSame(const std::vector<s32>& a, const std::vector<std::string>& aStrings, const std::vector<s32>& b, const std::vector<std::string>& bStrings)
+{
+    if (a.size() != b.size())
+    {
+        return false;
+    }
+    else                                                        
+    {                                                           
+        for (s32 i = 0; i < a.size(); i++)
+        {
+            if (aStrings[a[i]] != bStrings[b[i]])
+                return false;
+        }
+    }
+    return true;
+}
+bool ArraysAreTheSame(const std::vector<std::string>& a, const std::vector<std::string>& b)
+{
+    if (a.size() != b.size())
+    {
+        return false;
+    }
+    else                                                        
+    {                                                           
+        for (s32 i = 0; i < a.size(); i++)
+        {
+            if (a[i] != b[i])
+                return false;
+        }
+    }
+    return true;
+}
+bool ArraysAreTheSame(const BuildEvents& a, const BuildEvents& b)
+{
+    if (a.m_events.size() != b.m_events.size())
+    {
+        return false;
+    }
+    else                                                        
+    {                                                           
+        for (s32 i = 0; i < a.m_events.size(); i++)
+        {
+            if (a.m_events[i].name != b.m_events[i].name)
+                return false;
+        }
+    }
+    return true;
+}
 
 bool ConfigIsSameAsLastLoad(const Settings& s)
 {
@@ -268,7 +479,9 @@ if (s. ## __member != fileSettings. ## __member)\
 #define ARRCMP(__a, __b)                                        \
 do {                                                            \
     if (__a ## .size() != __b ## .size())                       \
+    {                                                           \
         return false;                                           \
+    }                                                           \
     else                                                        \
     {                                                           \
             for (s32 index = 0; index < __a ## .size(); index++)\
@@ -289,10 +502,10 @@ if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__in
     ROOTCMP(rootPath);
     ROOTCMP(projectPath);
 
-    ARRCMP(s.versionOptions, fileSettings.versionOptions);
-    ARRCMP(s.switchOptions, fileSettings.switchOptions);
-    ARRCMP(s.preBuildEvents, fileSettings.preBuildEvents);
-    ARRCMP(s.postBuildEvents, fileSettings.postBuildEvents);
+    ArraysAreTheSame(s.versionOptions,  fileSettings.versionOptions );
+    ArraysAreTheSame(s.switchOptions,   fileSettings.switchOptions  );
+    ArraysAreTheSame(s.preBuildEvents,  fileSettings.preBuildEvents );
+    ArraysAreTheSame(s.postBuildEvents, fileSettings.postBuildEvents);
 
     if (s.platformOptions.size() != fileSettings.platformOptions.size())
         return false;
@@ -301,10 +514,10 @@ if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__in
         for (s32 i = 0; i < s.platformOptions.size(); i++)
         {
             CHILDCMP(i, name);
-            ARRCMP(s.platformOptions[i].enabledVersions, fileSettings.platformOptions[i].enabledVersions);
-            ARRCMP(s.platformOptions[i].enabledSwitches, fileSettings.platformOptions[i].enabledSwitches);
-            ARRCMP(s.platformOptions[i].enabledPreBuild, fileSettings.platformOptions[i].enabledPreBuild);
-            ARRCMP(s.platformOptions[i].enabledPostBuild, fileSettings.platformOptions[i].enabledPostBuild);
+            ArraysAreTheSame(s.platformOptions[i].enabledVersions, s.versionOptions, fileSettings.platformOptions[i].enabledVersions, fileSettings.versionOptions);
+            ArraysAreTheSame(s.platformOptions[i].enabledSwitches, s.switchOptions, fileSettings.platformOptions[i].enabledSwitches, fileSettings.switchOptions);
+            ArraysAreTheSame(s.platformOptions[i].enabledPreBuild, s.preBuildEvents, fileSettings.platformOptions[i].enabledPreBuild, fileSettings.preBuildEvents);
+            ArraysAreTheSame(s.platformOptions[i].enabledPostBuild, s.postBuildEvents, fileSettings.platformOptions[i].enabledPostBuild, fileSettings.postBuildEvents);
         }
     }
 
