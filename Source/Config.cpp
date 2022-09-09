@@ -22,6 +22,7 @@ const char* enabledVersionsText     = "Enabled Versions";
 const char* enabledSwitchesText     = "Enabled Switches";
 const char* enabledPreBuildText     = "Enabled Pre Build";
 const char* enabledPostBuildText    = "Enabled Post Build";
+const char* UPSText                 = "Updates Per Second";
 const s32 currentVersion = 1;
 
 Settings fileSettings;
@@ -180,9 +181,12 @@ void SaveConfig(Settings& settings)
     j[styleSelectionText]       = settings.styleSelection;
     j[rootPathText]             = settings.rootPath;
     j[projectPathText]          = settings.projectPath;
+    j[UPSText]                  = settings.UPS;
 
     for (s32 i = 0; i < settings.platformOptions.size(); i++)
     {
+        if (settings.platformOptions[i].name.empty())
+            continue;
         PlatformSettings& set = settings.platformOptions[i];
         AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledVersionsText,      set.enabledVersions,    settings.versionOptions);
         AddParentAndChildrenInt(j[platformOptionsText][set.name], enabledSwitchesText,      set.enabledSwitches,    settings.switchOptions);
@@ -207,7 +211,7 @@ void SaveConfig(Settings& settings)
 
 void GetChildrenString(nlohmann::json& j, const std::string& name, std::vector<std::string>& data)
 {
-    if (!j[name].is_null())
+    if (! j[name].is_null())
         data = j[name];
 }
 void GetChildrenString(nlohmann::json& j, const std::string& name, BuildEvents& be)
@@ -281,10 +285,15 @@ void ValidateLoadConfig(Settings& settings)
     }
 }
 
+bool Valid(const nlohmann::json root, const std::string& text)
+{
+    return (root.contains(text) && !root[text].is_null());
+}
+
 template <typename T>
 void GetTypeFromValid(const nlohmann::json& root, const char* name, T& var)
 {
-    if (!root[name].is_null()) 
+    if (Valid(root, name))
     {
         var = root[name].get<T>();
     }
@@ -299,24 +308,22 @@ bool LoadConfig(Settings& settings)
     nlohmann::json j;
     file >> j;
 
-    if (!j[versionText].is_null())
-    {
-        if (j[versionText].get<s32>() != currentVersion)
-            return false;
-    }
+    if (!Valid(j, versionText) || j[versionText].get<s32>() != currentVersion)
+        return false;
 
-    GetTypeFromValid<s32>(          j, platformSelectionText,  fileSettings.platformSelection);
-    GetTypeFromValid<s32>(          j, colorSelectionText,     fileSettings.colorSelection);
-    GetTypeFromValid<s32>(          j, styleSelectionText,     fileSettings.styleSelection);
-    GetTypeFromValid<std::string>(  j, rootPathText,           fileSettings.rootPath);
-    GetTypeFromValid<std::string>(  j, projectPathText,        fileSettings.projectPath);
+    GetTypeFromValid<s32>(          j, platformSelectionText,   fileSettings.platformSelection);
+    GetTypeFromValid<s32>(          j, colorSelectionText,      fileSettings.colorSelection);
+    GetTypeFromValid<s32>(          j, styleSelectionText,      fileSettings.styleSelection);
+    GetTypeFromValid<std::string>(  j, rootPathText,            fileSettings.rootPath);
+    GetTypeFromValid<std::string>(  j, projectPathText,         fileSettings.projectPath);
+    GetTypeFromValid<float>(        j, UPSText,                 fileSettings.UPS);
 
     GetChildrenString(j, versionOptionsText,   fileSettings.versionOptions);
     GetChildrenString(j, switchOptionsText,    fileSettings.switchOptions);
     GetChildrenString(j, preBuildEventsText,  fileSettings.preBuildEvents);
     GetChildrenString(j, postBuildEventsText, fileSettings.postBuildEvents);
 
-    assert(!j[platformOptionsText].is_null());
+    assert(Valid(j, platformOptionsText));
 
     for (auto it = j[platformOptionsText].begin(); it != j[platformOptionsText].end(); it++)
     {
@@ -325,8 +332,8 @@ bool LoadConfig(Settings& settings)
         if (it.value().is_null())
             continue;
 
-        LoadPlatformSettingsChildren(enabledVersionsText,    it.value(), po[po.size() - 1].enabledVersions,  fileSettings.versionOptions);
-        LoadPlatformSettingsChildren(enabledSwitchesText,    it.value(), po[po.size() - 1].enabledSwitches,  fileSettings.switchOptions);
+        LoadPlatformSettingsChildren(enabledVersionsText,   it.value(), po[po.size() - 1].enabledVersions,  fileSettings.versionOptions);
+        LoadPlatformSettingsChildren(enabledSwitchesText,   it.value(), po[po.size() - 1].enabledSwitches,  fileSettings.switchOptions);
         LoadPlatformSettingsChildren(enabledPreBuildText,   it.value(), po[po.size() - 1].enabledPreBuild,  fileSettings.preBuildEvents);
         LoadPlatformSettingsChildren(enabledPostBuildText,  it.value(), po[po.size() - 1].enabledPostBuild, fileSettings.postBuildEvents);
     }
@@ -345,6 +352,7 @@ bool LoadConfig(Settings& settings)
 
 void LoadDefaults(Settings& settings)
 {
+    settings.UPS = 144.0f;
     settings.platformOptions.push_back({ "Win64" });
     settings.platformOptions.push_back({ "XboxOne" });
     settings.platformOptions.push_back({ "XboxOneGDK" });
@@ -471,6 +479,7 @@ if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__in
     ROOTCMP(styleSelection);
     ROOTCMP(rootPath);
     ROOTCMP(projectPath);
+    ROOTCMP(UPS);
 
     ArraysAreTheSame(s.versionOptions,  fileSettings.versionOptions );
     ArraysAreTheSame(s.switchOptions,   fileSettings.switchOptions  );

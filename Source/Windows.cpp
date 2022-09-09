@@ -19,7 +19,7 @@ std::string ToString(const char* fmt, ...)
     return buffer;
 }
 
-void RunProcess(const char* applicationPath, const char* arguments)
+void RunProcess(const char* path, const char* args)
 {
     //TODO: Allow this to work for ASCII AND Unicode
     SHELLEXECUTEINFO info = {};
@@ -27,8 +27,8 @@ void RunProcess(const char* applicationPath, const char* arguments)
     info.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
     info.hwnd;
     info.lpVerb = "open";
-    info.lpFile = "cmd.exe";
-    info.lpParameters = arguments;
+    info.lpFile = path ? path : "cmd.exe";
+    info.lpParameters = args;
     info.lpDirectory = NULL;
     info.nShow = SW_SHOW;
     info.hInstApp = NULL; //out
@@ -44,7 +44,7 @@ void RunProcess(const char* applicationPath, const char* arguments)
     {
         std::string errorBoxTitle = ToString("ShellExecuteEx Error: %i", GetLastError());
         std::string errorText     = ToString("Application Path: %s\n"
-                                             "Command Line Params: %s", applicationPath, arguments);
+                                             "Command Line Params: %s", path, args);
         ShowErrorWindow(errorBoxTitle, errorText);
         assert(false);
         return;

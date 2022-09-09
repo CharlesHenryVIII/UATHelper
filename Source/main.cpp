@@ -54,6 +54,44 @@ void RemoveNumberInVector(std::vector<s32>& data, const s32 val)
             return a == val;
         });
 }
+void RemoveNullElements(std::vector<PlatformSettings>& data)
+{
+    std::erase_if(data,
+        [](const PlatformSettings& ps)
+        {
+            return ps.name.empty();
+        });
+}
+int DynamicTextCallback(ImGuiInputTextCallbackData* data)
+{
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackResize)
+    {
+        assert(data->UserData);
+        if (!data->UserData)
+            return 1;
+        std::string* string = (std::string*)data->UserData;
+        //assert((char*)string->data() == (char*)data->Buf);
+#if 1
+            string->resize(data->BufTextLen);
+            data->Buf = string->data();
+#else
+        if (data->BufSize < data->BufTextLen)
+        {
+            string->resize(data->BufSize);
+            data->Buf = string->data();
+        }
+#endif
+    }
+    return 0;
+}
+bool InputTextDynamicSize(const std::string& title, std::string& s, ImGuiInputTextFlags flags = ImGuiInputTextFlags_None)
+{
+    return ImGui::InputText(title.c_str(), s.data(), s.capacity(), flags | ImGuiInputTextFlags_CallbackResize, DynamicTextCallback, &s);
+}
+bool InputTextMultilineDynamicSize(const std::string& title, std::string& s, ImGuiInputTextFlags flags = ImGuiInputTextFlags_None)
+{
+    return ImGui::InputTextMultiline(title.c_str(), const_cast<char*>(title.data()), s.capacity(), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 2), flags | ImGuiInputTextFlags_CallbackResize, DynamicTextCallback, &s);
+}
 
 void TextCentered(std::string text) 
 {
@@ -77,51 +115,43 @@ void TextCentered(std::string text)
     ImGui::PopTextWrapPos();
 }
 
-
-
-int DynamicTextCallback(ImGuiInputTextCallbackData* data)
+std::string* s_modifyingText = nullptr;
+std::string s_unmodifiedText;
+void OpenModifyingPrompt(std::string& s)
 {
-    if (data->EventFlag == ImGuiInputTextFlags_CallbackResize)
+    if (ImGui::BeginPopupContextItem())
     {
-        assert(data->UserData);
-        if (!data->UserData)
-            return 1;
-        std::string* string = (std::string*)data->UserData;
-        //assert((char*)string->data() == (char*)data->Buf);
-#if 1
-            string->resize(data->BufTextLen);
-            data->Buf = string->data();
-#else
-        if (data->BufSize < data->BufTextLen)
+        //ImGui::BeginDisabled();
+        if (ImGui::Selectable("Edit"))
         {
-            string->resize(data->BufSize);
-            data->Buf = string->data();
+            s_unmodifiedText = s;
+            s_modifyingText = &s;
+            ImGui::CloseCurrentPopup();
+            //ImGui::OpenPopup("Edit Text", ImGuiPopupFlags_None);
         }
-#endif
+        //ImGui::EndDisabled();
+
+        if (ImGui::Selectable("Delete"))
+        {
+            s.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
-    return 0;
-}
-//NOTE(CSH): Ideally there would be a function overload that takes a const char* for the title input but the function cannot be determined
-//since passsing a string could convert to a const char* or be built into a std::string
-bool InputTextDynamicSize(const std::string& title, std::string& s, ImGuiInputTextFlags flags = ImGuiInputTextFlags_None)
-{
-    return ImGui::InputText(title.c_str(), s.data(), s.capacity(), flags | ImGuiInputTextFlags_CallbackResize, DynamicTextCallback, &s);
-}
-bool InputTextMultilineDynamicSize(const std::string& title, std::string& s, ImGuiInputTextFlags flags = ImGuiInputTextFlags_None)
-{
-    return ImGui::InputTextMultiline(title.c_str(), const_cast<char*>(title.data()), s.capacity(), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 2), flags | ImGuiInputTextFlags_CallbackResize, DynamicTextCallback, &s);
 }
 
 
-bool NameStatusButtonAdd(const std::string& buttonName, std::string& text, int codeLine)
+
+
+
+bool NameStatusButtonAdd(const std::string& buttonName, std::string& text, float length = 125.0f)
 {
     ImGui::SameLine();
-    std::string id = "##" + std::to_string(codeLine);
+    std::string id = "##" + buttonName;
     float buttonSize = 25.0f;
 #if 1
-    float inputSize = 100.0f;
     float availableWidth = ImGui::GetContentRegionAvail().x;
-    if (availableWidth < inputSize)
+    if (availableWidth < length)
     {
         ImGui::NewLine();
     }
@@ -136,10 +166,14 @@ bool NameStatusButtonAdd(const std::string& buttonName, std::string& text, int c
     availableWidth = ImGui::GetContentRegionAvail().x;
     inputSize = availableWidth * 0.25f
 #endif
-    ImGui::SetNextItemWidth(inputSize - buttonSize);
+    ImGui::SetNextItemWidth(length - buttonSize);
     InputTextDynamicSize(id, text);
     ImGui::SameLine();
-    std::string fullButtonName = "Add " + buttonName;
+#if 0
+    std::string fullButtonName = buttonName;
+#else
+    std::string fullButtonName = "Add##" + buttonName;
+#endif
     return ImGui::Button(fullButtonName.c_str()) && text.size();
 }
 
@@ -263,9 +297,11 @@ void ExecutionSection(const std::string& sectionTitle, BuildEvents& be, std::vec
                             ImGui::ResetMouseDragDelta();
                         }
                     }
+                    OpenModifyingPrompt(be.m_events[row_n].name);
                 }
             }
         }
+        be.RemoveNullElements();
     }
 }
 
@@ -317,7 +353,7 @@ void WrapInQuotes(std::string& s)
     }
 }
 
-void RunProcess(const std::string& name, Threading& thread)//, bool keepAlive)
+void RunProcessSingle(const std::string& name, Threading& thread)//, bool keepAlive)
 {
     //TODO: Make this function and surrounding code more robust
 
@@ -347,7 +383,7 @@ void RunProcessList(const BuildEvents& be, const std::vector<s32>& enabledIDs, T
         BuildEvent b;
         if (be.Get(b, enabledIDs[i]))
         {
-            RunProcess(b.name, thread);
+            RunProcessSingle(b.name, thread);
         }
     }
 }
@@ -382,6 +418,8 @@ bool GetCStringFromPlatformSettings(void* data, int idx, const char** out_text)
     const std::vector<PlatformSettings>& d = *(std::vector<PlatformSettings>*)data;
     if (idx >= d.size())
         return false;
+    if (d[idx].name.empty())
+        return false;
     *out_text = d[idx].name.c_str();
     return true;
 }
@@ -393,27 +431,6 @@ bool GetCStringFromThemes(void* data, int idx, const char** out_text)
     const Theme* d = (Theme*)data;
     *out_text = d[idx].name;
     return true;
-}
-
-void OpenModifyingPrompt(std::string& s)
-{
-    if (ImGui::BeginPopupContextItem())
-    {
-        ImGui::BeginDisabled();
-        if (ImGui::Selectable("Edit"))
-        {
-            
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndDisabled();
-
-        if (ImGui::Selectable("Delete"))
-        {
-            s.clear();
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
 }
 
 
@@ -551,7 +568,6 @@ int main(int, char**)
     bool modifiedSettings = false;
     bool keepProcessWindowAlive = true;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    float ups = 144.0f; //updates per second
     u64 frameStartTicks = 0;
 
     // Main loop
@@ -631,22 +647,29 @@ int main(int, char**)
                         ImGui::SetNextItemWidth(100);
                         if (ImGui::Combo("##Style", &settings.styleSelection, GetCStringFromThemes, &StyleOptions, (s32)Style_Count))
                             Style_Set(settings.styleSelection);
-
+                        ImGui::Text("UPS:");
+                        ImGui::SameLine();
+                        HelpMarker("This changes the updates per second of the application");
+                        ImGui::SameLine();
+                        ImGui::SetNextItemWidth(90.0f);
+                        ImGui::InputFloat("##Updates Per Second", &settings.UPS, 1.0f, 10.0f, "%.1f");
                         ImGui::EndMenu();
                     }
                     if (ImGui::BeginMenu("Config"))
                     {
                         ZoneScopedN("Config");
-                        if (ImGui::MenuItem("Save Config", "Ctrl+S"))
+                        if (ImGui::MenuItem("Save"/*, "Ctrl+S"*/))
                         {
                             SaveConfig(settings);
                             LoadConfig(settings);//clear any out of bounds indices
                             modifiedSettings = false;
                         }
-                        if (ImGui::MenuItem("Load Config", "Ctrl+L"))
+                        if (ImGui::MenuItem("Load"/*, "Ctrl+L"*/))
                             LoadConfig(settings);
-                        if (ImGui::MenuItem("Clear Config"))
+                        if (ImGui::MenuItem("Clear"))
                             ClearConfig(settings);
+                        if (ImGui::MenuItem("Open"))
+                            RunProcess("UATHelperConfig.json");
                         ImGui::EndMenu();
                     }
                     ImGui::EndMenuBar();
@@ -708,10 +731,17 @@ int main(int, char**)
                     ImGui::Combo("##Platform Selection", &settings.platformSelection, GetCStringFromPlatformSettings,
                         &settings.platformOptions, (s32)settings.platformOptions.size());
                     static std::string platformAddText;
-                    if (NameStatusButtonAdd("Platform", platformAddText, __LINE__))
+                    if (NameStatusButtonAdd("Platform", platformAddText))
                     {
                         settings.platformOptions.push_back({ platformAddText });
                         platformAddText.clear();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Delete## Platform"))
+                    {
+                        settings.platformOptions[settings.platformSelection].name.clear();
+                        settings.platformSelection = Max(settings.platformSelection--, 0);
+                        RemoveNullElements(settings.platformOptions);
                     }
 
                     ImGui::Text("Version Selection");
@@ -719,7 +749,7 @@ int main(int, char**)
                     HelpMarker("input versions you want to build, i.e. \"Test\" or \"Development\" just without the quotes and only one per entry");
                     ImGui::SameLine();
                     static std::string versionInputName;
-                    if (NameStatusButtonAdd("Version", versionInputName, __LINE__))
+                    if (NameStatusButtonAdd("Version", versionInputName))
                     {
                         settings.versionOptions.push_back({ versionInputName });
                         versionInputName.clear();
@@ -732,7 +762,7 @@ int main(int, char**)
                     {
                         if (settings.versionOptions[i].empty())
                             continue;
-                        //if youre hovering over it
+                        //if youre hovering over itups
                         float button_szx = ImGui::CalcTextSize(settings.versionOptions[i].c_str()).x + 2 * style.FramePadding.x;
                         float next_button_x2 = last_button_x2 + style.ItemSpacing.x + button_szx;
                         if (next_button_x2 < window_visible_x2)
@@ -766,6 +796,13 @@ int main(int, char**)
                     ImGui::SameLine();
                     HelpMarker("Added switches for build here, excluding the starting \"-\"(dash)");
                     ImGui::NewLine();
+                    static std::string name;
+                    if (NameStatusButtonAdd("Switch", name, 400.0f))
+                    {
+                        settings.switchOptions.push_back({ name });
+                        name.clear();
+                    }
+                    ImGui::NewLine();
                     float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
                     float last_button_x2 = 0;
                     ImGuiStyle& style = ImGui::GetStyle();
@@ -795,12 +832,6 @@ int main(int, char**)
                         last_button_x2 = ImGui::GetItemRectMax().x;
 
                         OpenModifyingPrompt(settings.switchOptions[i]);
-                    }
-                    static std::string name;
-                    if (NameStatusButtonAdd("Switch", name, __LINE__))
-                    {
-                        settings.switchOptions.push_back({ name });
-                        name.clear();
                     }
                 }
                 ImGui::EndChild();
@@ -909,7 +940,7 @@ int main(int, char**)
                             settings.platformOptions[settings.platformSelection].enabledPreBuild,
                             threading);
 //#if NDEBUG
-                        RunProcess(finalCommandLine, threading);
+                        RunProcessSingle(finalCommandLine, threading);
 //#endif
                         RunProcessList(settings.postBuildEvents,
                             settings.platformOptions[settings.platformSelection].enabledPostBuild,
@@ -919,10 +950,38 @@ int main(int, char**)
                         ImGui::EndDisabled();
                     ImGui::Checkbox("Keep UAT CMD Window Open", &keepProcessWindowAlive);
 
-                    ImGui::Text("Application average %.3f ms/frame (%.1f FPS, Target: %.1f FPS)", 1000.0f / io.Framerate, io.Framerate, ups);
+                    ImGui::Text("Application average %.3f ms/frame (%.1f FPS, Target: %.1f FPS)", 1000.0f / io.Framerate, io.Framerate, settings.UPS);
                 }
                 ImGui::EndChild();
 
+                if (s_modifyingText != nullptr)
+                {
+                    const char* title = "Edit Text";
+                    ImGui::OpenPopup(title);
+                    if (ImGui::BeginPopupModal(title))
+                    {
+                        float buttonHeight = 30.0f;
+                        float width = 300.0f;
+                        ImGui::SetNextItemWidth(width);
+                        InputTextDynamicSize("##Modifying Text", *s_modifyingText);
+                        if (ImGui::Button("Save", ImVec2(width / 2.0f, buttonHeight)))
+                        {
+                            s_modifyingText = nullptr;
+                            s_unmodifiedText.clear();
+                            ImGui::CloseCurrentPopup();
+                        }
+                        ImGui::SameLine();
+                        ImVec2 saveButtonSize = ImGui::GetItemRectSize();
+                        if (ImGui::Button("Close", ImVec2(width / 2.0f, buttonHeight)))
+                        {
+                            *s_modifyingText = s_unmodifiedText;
+                            s_modifyingText = nullptr;
+                            s_unmodifiedText.clear();
+                            ImGui::CloseCurrentPopup();
+                        }
+                        ImGui::EndPopup();
+                    }
+                }
 
                 if (exitProgram)
                 {
@@ -1006,7 +1065,7 @@ int main(int, char**)
         }
         FrameMark;
         u64 frameEndTicks = SDL_GetTicks64();
-        float MSPerUpdate = ((1.0f / ups) * 1000.0f);
+        float MSPerUpdate = ((1.0f / settings.UPS) * 1000.0f);
         u64 delayAmount = (u64)((u64)MSPerUpdate - (frameEndTicks - frameStartTicks));
         u64 clamped = Clamp<u64>(delayAmount, 0, (u64)MSPerUpdate);
         SDL_Delay((u32)clamped);

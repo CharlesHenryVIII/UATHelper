@@ -32,6 +32,7 @@ struct Settings {
     s32 platformSelection = 0;
     s32 colorSelection = {};
     s32 styleSelection = {};
+    float UPS = 144.0f; //updates per second
 #if 1
     std::string rootPath;
     std::string projectPath;
