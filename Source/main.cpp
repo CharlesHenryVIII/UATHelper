@@ -34,7 +34,6 @@
     return { a.x * b.x, a.y * b.y };
 }
 
-//bool FindNUmberInVector(std::vector<PlatformSettings>& platformSettings, const s32 index, const s32 val)
 bool FindNumberInVector(const std::vector<s32>& data, const s32 val)
 {
     for (s32 i = 0; i < data.size(); i++)
@@ -45,7 +44,6 @@ bool FindNumberInVector(const std::vector<s32>& data, const s32 val)
     return false;
 }
 
-//void FindNUmberInVector(std::vector<PlatformSettings>& platformSettings, const s32 index, const s32 val)
 void RemoveNumberInVector(std::vector<s32>& data, const s32 val)
 {
     std::erase_if(data,
@@ -70,17 +68,8 @@ int DynamicTextCallback(ImGuiInputTextCallbackData* data)
         if (!data->UserData)
             return 1;
         std::string* string = (std::string*)data->UserData;
-        //assert((char*)string->data() == (char*)data->Buf);
-#if 1
-            string->resize(data->BufTextLen);
-            data->Buf = string->data();
-#else
-        if (data->BufSize < data->BufTextLen)
-        {
-            string->resize(data->BufSize);
-            data->Buf = string->data();
-        }
-#endif
+        string->resize(data->BufTextLen);
+        data->Buf = string->data();
     }
     return 0;
 }
@@ -121,15 +110,12 @@ void OpenModifyingPrompt(std::string& s)
 {
     if (ImGui::BeginPopupContextItem())
     {
-        //ImGui::BeginDisabled();
         if (ImGui::Selectable("Edit"))
         {
             s_unmodifiedText = s;
             s_modifyingText = &s;
             ImGui::CloseCurrentPopup();
-            //ImGui::OpenPopup("Edit Text", ImGuiPopupFlags_None);
         }
-        //ImGui::EndDisabled();
 
         if (ImGui::Selectable("Delete"))
         {
@@ -169,11 +155,7 @@ bool NameStatusButtonAdd(const std::string& buttonName, std::string& text, float
     ImGui::SetNextItemWidth(length - buttonSize);
     InputTextDynamicSize(id, text);
     ImGui::SameLine();
-#if 0
-    std::string fullButtonName = buttonName;
-#else
     std::string fullButtonName = "Add##" + buttonName;
-#endif
     return ImGui::Button(fullButtonName.c_str()) && text.size();
 }
 
@@ -204,9 +186,15 @@ void ExecutionSection(const std::string& sectionTitle, BuildEvents& be, std::vec
         inputSuccess |= ImGui::Button("Add");
         if (inputSuccess)
         {
-            RemoveStartAndEndSpaces(inputString);
-            be.Add(inputString);
-            inputString.clear();
+            if (inputString.size())
+            {
+                RemoveStartAndEndSpaces(inputString);
+                if (inputString.size())
+                {
+                    be.Add(inputString);
+                    inputString.clear();
+                }
+            }
         }
         if (be.m_events.size() == 0)
             return;
@@ -331,7 +319,7 @@ bool SeperatePathAndArguments(const std::string& input, std::string& path, std::
     }
 #endif
     s32 maxValue = Min<s32>((s32)input.size(), i + 1);
-    path = input.substr(0,          maxValue);
+    path = input.substr(0, maxValue);
     if (maxValue == input.size())
     {
         args.clear();
@@ -364,15 +352,8 @@ void RunProcessSingle(const std::string& name, Threading& thread)//, bool keepAl
         return;
     }
 
-    std::string args;
-    args.clear();
-    if (!(name[0] == '/' && (name[1] == 'c' || name[1] == 'K')))
-        args = "/c";
-    args = '\"' + args + name + '\"';
-
     StartProcessJob* job = new StartProcessJob();
-    job->arguments = args;
-
+    SeperatePathAndArguments(name, job->applicationPath, job->arguments);
     thread.SubmitJob(job);
 }
 
@@ -513,19 +494,6 @@ int main(int, char**)
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
-    //ImGui::StyleColorsClassic();
-    // Setup Dear ImGui style
-    //ImGuiTheme_Basic(style);
-    //ImGui::StyleColorsDark();
-    //ImGuiColor_Grey();
-    //ImGuiColor_WildCard();
-    //ImGuiColor_GreenAccent();
-    //ImGuiColor_RedAccent();
-    //ImGuiColor_Grey();
-
-    //ImGuiTheme_Basic();
-    //ImGuiTheme_SimpleRounding();
-
     // Setup Platform/Renderer backends
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init(glsl_version);
@@ -538,10 +506,6 @@ int main(int, char**)
         LoadDefaults(settings);
     }
 
-    //SaveConfig(settings);
-    //return 0;
-    std::string finalCommandLine;
-    bool buildRunning = false;
 
 
     //ImFont* mainFont = io.Fonts->AddFontFromFileTTF("Assets/DroidSans.ttf", 16);
@@ -562,7 +526,8 @@ int main(int, char**)
     //ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
     //IM_ASSERT(font != NULL);
 
-    // Our state
+    std::string finalCommandLine;
+    bool buildRunning = false;
     bool show_demo_window = false;
     bool exitProgram = false;
     bool modifiedSettings = false;
@@ -840,7 +805,7 @@ int main(int, char**)
                 ImVec2 executionSize = HadamardProduct(viewport->WorkSize, executionScale);
                 if (ImGui::BeginChild("Building", executionSize, true, sectionFlags))
                 {
-                    //ZoneScopedN("Building");
+                    ZoneScopedN("Building");
                     TextCentered("Build Events");
                     ImGui::SameLine();
                     HelpMarker("Add programs to be ran before or after the build");
@@ -892,13 +857,18 @@ int main(int, char**)
                     }
                     else
                     {
-                        //finalCommandLine += "\"";
+#if 1
+                        finalCommandLine += "\"";
+#else
                         if (keepProcessWindowAlive)
                             finalCommandLine += "/K ";
                         else
                             finalCommandLine += "/c ";
+#endif
                         finalCommandLine += settings.rootPath.c_str();
-                        finalCommandLine += "Engine/Build/BatchFiles/RunUAT.bat BuildCookRun";
+                        finalCommandLine += "Engine/Build/BatchFiles/RunUAT.bat";
+                        finalCommandLine += "\"";
+                        finalCommandLine += " BuildCookRun";
                         finalCommandLine += " -project=";
                         finalCommandLine += settings.projectPath.c_str();
                         finalCommandLine += " -targetplatform=";
@@ -948,7 +918,11 @@ int main(int, char**)
                     }
                     if (buildRunning || commandLineInvalid)
                         ImGui::EndDisabled();
-                    ImGui::Checkbox("Keep UAT CMD Window Open", &keepProcessWindowAlive);
+                    std::string logLoc = settings.rootPath + "Engine/Programs/AutomationTool/Saved/Logs/Log.txt";
+                    ImGui::SameLine();
+                    if (ImGui::Button("Open Log"))
+                        RunProcess(logLoc.c_str(), nullptr, true);
+                    //ImGui::Checkbox("Keep UAT CMD Window Open", &keepProcessWindowAlive);
 
                     ImGui::Text("Application average %.3f ms/frame (%.1f FPS, Target: %.1f FPS)", 1000.0f / io.Framerate, io.Framerate, settings.UPS);
                 }
@@ -957,22 +931,24 @@ int main(int, char**)
                 if (s_modifyingText != nullptr)
                 {
                     const char* title = "Edit Text";
+                    ImGui::SetNextWindowSize(ImVec2(500.0f, 0), ImGuiCond_Once);
                     ImGui::OpenPopup(title);
                     if (ImGui::BeginPopupModal(title))
                     {
                         float buttonHeight = 30.0f;
-                        float width = 300.0f;
+                        float width = -FLT_MIN;
                         ImGui::SetNextItemWidth(width);
                         InputTextDynamicSize("##Modifying Text", *s_modifyingText);
-                        if (ImGui::Button("Save", ImVec2(width / 2.0f, buttonHeight)))
+                        ImVec2 popupSize = ImGui::GetWindowSize();
+                        //TODO: add proper padding (this doesn't properly pad when there is rounding)
+                        if (ImGui::Button("Save", ImVec2((popupSize.x / 2.0f) - (1.5f * style.WindowPadding.x), buttonHeight)))
                         {
                             s_modifyingText = nullptr;
                             s_unmodifiedText.clear();
                             ImGui::CloseCurrentPopup();
                         }
                         ImGui::SameLine();
-                        ImVec2 saveButtonSize = ImGui::GetItemRectSize();
-                        if (ImGui::Button("Close", ImVec2(width / 2.0f, buttonHeight)))
+                        if (ImGui::Button("Close", ImVec2(-FLT_MIN, buttonHeight)))
                         {
                             *s_modifyingText = s_unmodifiedText;
                             s_modifyingText = nullptr;

@@ -14,4 +14,3 @@
 
 ### TODO
 - [ ] Convert to GLFW to remove the dependancy on dlls
-- [X] Fix high core usage ALL the time

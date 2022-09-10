@@ -6,7 +6,7 @@
 #include <string>
 
 std::string ToString(const char* fmt, ...);
-void        RunProcess(const char* path, const char* args = nullptr);
+void        RunProcess(const char* path, const char* args = nullptr, bool async = false);
 void        InitOS(SDL_Window* window);
 
 static bool keepOpen = true;

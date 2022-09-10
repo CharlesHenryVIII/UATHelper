@@ -19,14 +19,15 @@ std::string ToString(const char* fmt, ...)
     return buffer;
 }
 
-void RunProcess(const char* path, const char* args)
+void RunProcess(const char* path, const char* args, bool async)
 {
     //TODO: Allow this to work for ASCII AND Unicode
     SHELLEXECUTEINFO info = {};
     info.cbSize = sizeof(SHELLEXECUTEINFO);
     info.fMask = SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS;
     info.hwnd;
-    info.lpVerb = "open";
+    //info.lpVerb = "open";
+    info.lpVerb = NULL;
     info.lpFile = path ? path : "cmd.exe";
     info.lpParameters = args;
     info.lpDirectory = NULL;
@@ -44,24 +45,39 @@ void RunProcess(const char* path, const char* args)
     {
         std::string errorBoxTitle = ToString("ShellExecuteEx Error: %i", GetLastError());
         std::string errorText     = ToString("Application Path: %s\n"
-                                             "Command Line Params: %s", path, args);
+                                             "Command Line Params: %s", info.lpFile, args);
         ShowErrorWindow(errorBoxTitle, errorText);
         assert(false);
         return;
     }
-
-    DWORD result = WaitForSingleObject(info.hProcess, INFINITE);
-    s32 bad = GetLastError();
-    if (result)
+    if (!async)
     {
-        assert(false);
+        DWORD result = WaitForSingleObject(info.hProcess, INFINITE);
+        if (result)
+        {
+            std::string errorBoxTitle = ToString("WaitForSingleObject Error: %i", GetLastError());
+            std::string errorText = ToString("Application Path: %s\n"
+                "Command Line Params: %s", info.lpFile, args);
+            ShowErrorWindow(errorBoxTitle, errorText);
+            assert(false);
+        }
+        DWORD exitCode = {};
+        if (!GetExitCodeProcess(info.hProcess, &exitCode))
+        {
+            std::string errorBoxTitle = ToString("GetExitCodeProcess Error: %i", GetLastError());
+            std::string errorText = ToString("Application Path: %s\n"
+                "Command Line Params: %s", info.lpFile, args);
+            ShowErrorWindow(errorBoxTitle, errorText);
+            assert(false);
+        }
+        if (exitCode)
+        {
+            std::string errorBoxTitle = ToString("Program Exited with Exit Code: %i", exitCode);
+            std::string errorText = ToString("Application Path: %s\n"
+                "Command Line Params: %s", info.lpFile, args);
+            ShowErrorWindow(errorBoxTitle, errorText);
+        }
     }
-    DWORD exitCode = {};
-    if (!GetExitCodeProcess(info.hProcess, &exitCode))
-    {
-        assert(false);
-    }
-
 }
 
 void StartProcessJob::RunJob()
