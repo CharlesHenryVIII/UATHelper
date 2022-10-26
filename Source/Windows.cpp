@@ -19,7 +19,7 @@ std::string ToString(const char* fmt, ...)
     return buffer;
 }
 
-void RunProcess(const char* path, const char* args, bool async)
+s32 RunProcess(const char* path, const char* args, bool async)
 {
     //TODO: Allow this to work for ASCII AND Unicode
     SHELLEXECUTEINFO info = {};
@@ -48,7 +48,7 @@ void RunProcess(const char* path, const char* args, bool async)
                                              "Command Line Params: %s", info.lpFile, args);
         ShowErrorWindow(errorBoxTitle, errorText);
         assert(false);
-        return;
+        return 2;
     }
     if (!async)
     {
@@ -60,6 +60,7 @@ void RunProcess(const char* path, const char* args, bool async)
                 "Command Line Params: %s", info.lpFile, args);
             ShowErrorWindow(errorBoxTitle, errorText);
             assert(false);
+            return -1;
         }
         DWORD exitCode = {};
         if (!GetExitCodeProcess(info.hProcess, &exitCode))
@@ -68,16 +69,17 @@ void RunProcess(const char* path, const char* args, bool async)
             std::string errorText = ToString("Application Path: %s\n"
                 "Command Line Params: %s", info.lpFile, args);
             ShowErrorWindow(errorBoxTitle, errorText);
-            assert(false);
+            return -1;
         }
         if (exitCode)
         {
-            std::string errorBoxTitle = ToString("Program Exited with Exit Code: %i", exitCode);
+            std::string errorBoxTitle = ToString("Program Exited with Code: %i", exitCode);
             std::string errorText = ToString("Application Path: %s\n"
                 "Command Line Params: %s", info.lpFile, args);
-            ShowErrorWindow(errorBoxTitle, errorText);
+            return ShowCustomErrorWindow(errorBoxTitle, errorText);
         }
     }
+    return 0;
 }
 
 void StartProcessJob::RunJob()
@@ -85,6 +87,29 @@ void StartProcessJob::RunJob()
     const char* path = applicationPath.size()   ? applicationPath.c_str()   : nullptr;
     const char* args = arguments.size()         ? arguments.c_str()         : nullptr;
     RunProcess(path, args);
+}
+
+void RunUATJob::RunJob()
+{
+    const char* path = applicationPath.size()   ? applicationPath.c_str()   : nullptr;
+    const char* args = arguments.size()         ? arguments.c_str()         : nullptr;
+    if (s32 result = RunProcess(path, args))
+    {
+        Threading::GetInstance().ClearJobs();
+        switch (result)
+        {
+        case MessageBoxResponse_OpenLog:
+        {
+            std::string logLoc = rootPath + "Engine/Programs/AutomationTool/Saved/Logs/Log.txt";
+            RunProcess(logLoc.c_str(), nullptr, true);
+            break;
+        }
+        case -1:
+        {
+            //TODO: Handle the error case of GetExitCodeProcess failing, WaitforSingleObject, 
+        }
+        }
+    }
 }
 
 HICON icon;
@@ -101,6 +126,60 @@ void InitOS(SDL_Window* window)
     assert(icon != NULL);
 }
 
+s32 ShowCustomErrorWindow(const std::string& title, const std::string& text)
+{
+    const SDL_MessageBoxButtonData buttons[] = {
+        { 0,                                        MessageBoxResponse_Quit, "Quit Program" },
+        { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT,  MessageBoxResponse_Continue, "Continue" },
+        { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT,  MessageBoxResponse_OpenLog, "Open Log" },
+    };
+    const SDL_MessageBoxColorScheme colorScheme = {
+        { /* .colors (.r, .g, .b) */
+            /* [SDL_MESSAGEBOX_COLOR_BACKGROUND] */
+            { 255,   0,   0 },
+            /* [SDL_MESSAGEBOX_COLOR_TEXT] */
+            {   0, 255,   0 },
+            /* [SDL_MESSAGEBOX_COLOR_BUTTON_BORDER] */
+            { 255, 255,   0 },
+            /* [SDL_MESSAGEBOX_COLOR_BUTTON_BACKGROUND] */
+            {   0,   0, 255 },
+            /* [SDL_MESSAGEBOX_COLOR_BUTTON_SELECTED] */
+            { 255,   0, 255 }
+        }
+    };
+    const SDL_MessageBoxData messageboxdata = {
+        //SDL_MESSAGEBOX_INFORMATION, /* .flags */
+        //SDL_MESSAGEBOX_ERROR,
+        SDL_MESSAGEBOX_WARNING,
+        NULL, /* .window */
+        title.c_str(), /* .title */
+        nullptr,//text.c_str(), /* .message */
+        SDL_arraysize(buttons), /* .numbuttons */
+        buttons, /* .buttons */
+        &colorScheme /* .colorScheme */
+    };
+    s32 buttonID = -1;
+    if (SDL_ShowMessageBox(&messageboxdata, &buttonID) < 0) {
+        SDL_Log("error displaying message box");
+        //Quit Program
+        SDL_Event e;
+        e.type = SDL_QUIT;
+        e.quit.timestamp = 0;
+        SDL_PushEvent(&e);
+        return 0;
+    }
+    //TODO: Add better error handling for this?
+    assert(buttonID >= 0);
+
+    if (buttonID == MessageBoxResponse_Quit)
+    {
+        SDL_Event e;
+        e.type = SDL_QUIT;
+        e.quit.timestamp = 0;
+        SDL_PushEvent(&e);
+    }
+    return buttonID;
+}
 
 void ShowErrorWindow(const std::string& title, const std::string& text)
 {

@@ -38,6 +38,20 @@ public:
     {
         return m_jobsInFlight;
     }
+    void ClearJobs()
+    {
+        while (true)
+        {
+            Job* job = AcquireJob();
+            if (job == nullptr)
+                return;
+
+            m_semaphore.acquire();
+            delete job;
+            m_jobsInFlight--;
+            
+        }
+    }
 	void SubmitJob(Job* job);
 };
 

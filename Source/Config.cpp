@@ -352,7 +352,7 @@ bool LoadConfig(Settings& settings)
 
 void LoadDefaults(Settings& settings)
 {
-    settings.UPS = 144.0f;
+    settings.UPS = 60.0f;
     settings.platformOptions.push_back({ "Win64" });
     settings.platformOptions.push_back({ "XboxOne" });
     settings.platformOptions.push_back({ "XboxOneGDK" });
@@ -380,6 +380,8 @@ void LoadDefaults(Settings& settings)
     settings.switchOptions.push_back({ "package" });
     settings.switchOptions.push_back({ "skipcook" });
     settings.switchOptions.push_back({ "skipbuild" });
+    settings.switchOptions.push_back({ "servertargetplatform=win64" });
+    settings.switchOptions.push_back({ "serverconfig=Development" });
 
     Color_Set(settings.colorSelection);
     Style_Set(settings.styleSelection);

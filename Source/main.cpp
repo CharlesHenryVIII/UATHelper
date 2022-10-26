@@ -341,7 +341,7 @@ void WrapInQuotes(std::string& s)
     }
 }
 
-void RunProcessSingle(const std::string& name, Threading& thread)//, bool keepAlive)
+void SubmitProcessSingle(const std::string& name, Threading& thread)//, bool keepAlive)
 {
     //TODO: Make this function and surrounding code more robust
 
@@ -357,14 +357,14 @@ void RunProcessSingle(const std::string& name, Threading& thread)//, bool keepAl
     thread.SubmitJob(job);
 }
 
-void RunProcessList(const BuildEvents& be, const std::vector<s32>& enabledIDs, Threading& thread)
+void SubmitProcessList(const BuildEvents& be, const std::vector<s32>& enabledIDs, Threading& thread)
 {
     for (s32 i = 0; i < enabledIDs.size(); i++)
     {
         BuildEvent b;
         if (be.Get(b, enabledIDs[i]))
         {
-            RunProcessSingle(b.name, thread);
+            SubmitProcessSingle(b.name, thread);
         }
     }
 }
@@ -869,8 +869,9 @@ int main(int, char**)
                         finalCommandLine += "Engine/Build/BatchFiles/RunUAT.bat";
                         finalCommandLine += "\"";
                         finalCommandLine += " BuildCookRun";
-                        finalCommandLine += " -project=";
+                        finalCommandLine += " -project=\"";
                         finalCommandLine += settings.projectPath.c_str();
+                        finalCommandLine += "\"";
                         finalCommandLine += " -targetplatform=";
                         finalCommandLine += settings.platformOptions[settings.platformSelection].name;
                         finalCommandLine += " -clientconfig=";
@@ -884,8 +885,6 @@ int main(int, char**)
                             finalCommandLine += settings.versionOptions[optionIndex];
                             alreadyOneEnabled = true;
                         }
-                        finalCommandLine += " -servertargetplatform=win64";
-                        finalCommandLine += " -serverconfig=Development";
 
                         for (const auto& optionIndex : settings.platformOptions[settings.platformSelection].enabledSwitches)
                         {
@@ -906,13 +905,17 @@ int main(int, char**)
                     bool runButtonHit = ImGui::Button("RUN");
                     if (runButtonHit)
                     {
-                        RunProcessList(settings.preBuildEvents,
+                        SubmitProcessList(settings.preBuildEvents,
                             settings.platformOptions[settings.platformSelection].enabledPreBuild,
                             threading);
 //#if NDEBUG
-                        RunProcessSingle(finalCommandLine, threading);
+                        //SubmitProcessSingle(finalCommandLine, threading);
+                        RunUATJob* job = new RunUATJob();
+                        SeperatePathAndArguments(finalCommandLine, job->applicationPath, job->arguments);
+                        job->rootPath = settings.rootPath;
+                        threading.SubmitJob(job);
 //#endif
-                        RunProcessList(settings.postBuildEvents,
+                        SubmitProcessList(settings.postBuildEvents,
                             settings.platformOptions[settings.platformSelection].enabledPostBuild,
                             threading);
                     }

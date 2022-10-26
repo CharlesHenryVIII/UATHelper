@@ -6,16 +6,31 @@
 #include <string>
 
 std::string ToString(const char* fmt, ...);
-void        RunProcess(const char* path, const char* args = nullptr, bool async = false);
+s32         RunProcess(const char* path, const char* args = nullptr, bool async = false);
 void        InitOS(SDL_Window* window);
 
 static bool keepOpen = true;
-void ShowErrorWindow(const std::string& title, const std::string& text);
-
+void ShowErrorWindow        (const std::string& title, const std::string& text);
+s32 ShowCustomErrorWindow  (const std::string& title, const std::string& text);
+enum MessageBoxResponse : s32 {
+    MessageBoxResponse_Invalid,
+    MessageBoxResponse_OpenLog,
+    MessageBoxResponse_Continue,
+    MessageBoxResponse_Quit,
+    MessageBoxResponse_Count,
+};
 
 struct StartProcessJob : Job
 {
     std::string applicationPath;
     std::string arguments;
+    virtual void RunJob() override;
+};
+
+struct RunUATJob : Job
+{
+    std::string applicationPath;
+    std::string arguments;
+    std::string rootPath;
     virtual void RunJob() override;
 };
