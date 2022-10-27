@@ -15,11 +15,10 @@
 ### TODO
 - [ ] Convert to GLFW to remove the dependancy on dlls
 - [ ] Look into possibly removing one of file paths currently needed
-- [X] Add "Open Log" option in the error popup as well as remove the quit option
 - [ ] Make "Run" bigger?
 - [ ] cleanup?
-- [ ] About
-- [ ] Versioning (downloading new version?)
-- [X] Remove forced server switches
-- [X] Added quotes around -project in case the file path includes spaces
+- [X] About
+- [X] Versioning (downloading new version?)
+- [X] Remove the need to compare settings every frame
+- [X] Add alerting when a build completes
 - [ ] Do we need seperate configs for each new file path or do they share the same settings?

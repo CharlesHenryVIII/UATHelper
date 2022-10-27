@@ -114,6 +114,7 @@ void RunUATJob::RunJob()
 
 HICON icon;
 HMODULE instMod;
+HWND windowHandle;
 
 void InitOS(SDL_Window* window)
 {
@@ -122,6 +123,8 @@ void InitOS(SDL_Window* window)
     SDL_SysWMinfo wminfo;
     SDL_VERSION(&wminfo.version);
     assert(SDL_GetWindowWMInfo(window, &wminfo));
+    windowHandle = wminfo.info.win.window;
+    assert(windowHandle);
     icon = LoadIcon(instMod, MAKEINTRESOURCE(IDI_ICON1));
     assert(icon != NULL);
 }
@@ -233,4 +236,16 @@ void ShowErrorWindow(const std::string& title, const std::string& text)
         ImGui::EndPopup();
     }
 #endif
+}
+
+void NotifyWindowBuildFinished()
+{
+    FLASHWINFO info = {};
+    info.hwnd = windowHandle;
+    info.dwFlags = FLASHW_TRAY | FLASHW_TIMERNOFG;
+    info.uCount;
+    info.dwTimeout;
+    info.cbSize = sizeof(info);
+
+    FlashWindowEx(&info);
 }

@@ -27,6 +27,7 @@
 #include <SDL_opengl.h>
 #endif
 
+const float g_applicationVersion = 1.3f;
 
 
 [[nodiscard]] inline ImVec2 HadamardProduct(const ImVec2& a, const ImVec2& b)
@@ -530,7 +531,6 @@ int main(int, char**)
     bool buildRunning = false;
     bool show_demo_window = false;
     bool exitProgram = false;
-    bool modifiedSettings = false;
     bool keepProcessWindowAlive = true;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     u64 frameStartTicks = 0;
@@ -563,14 +563,16 @@ int main(int, char**)
             ImGui::NewFrame();
             //ImGui::PushFont(mainFont);
 #if 1
+            if (buildRunning && threading.GetJobsInFlight() == 0)
+            {
+                //BuildFinished
+                NotifyWindowBuildFinished();
+            }
             buildRunning = threading.GetJobsInFlight();
 #else
             if (!threading.GetJobsInFlight())
                 buildRunning = false;
 #endif
-
-            if (!modifiedSettings)
-                modifiedSettings = !ConfigIsSameAsLastLoad(settings);
 
 
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -589,10 +591,6 @@ int main(int, char**)
                 ImGuiWindowFlags_NoFocusOnAppearing |
                 ImGuiWindowFlags_NoNav |
                 ImGuiWindowFlags_NoMove;
-            if (modifiedSettings)
-            {
-                windowFlags |= ImGuiWindowFlags_UnsavedDocument;
-            }
 
             if (ImGui::Begin("Main", nullptr, windowFlags))
             {
@@ -627,7 +625,6 @@ int main(int, char**)
                         {
                             SaveConfig(settings);
                             LoadConfig(settings);//clear any out of bounds indices
-                            modifiedSettings = false;
                         }
                         if (ImGui::MenuItem("Load"/*, "Ctrl+L"*/))
                             LoadConfig(settings);
@@ -635,6 +632,14 @@ int main(int, char**)
                             ClearConfig(settings);
                         if (ImGui::MenuItem("Open"))
                             RunProcess("UATHelperConfig.json");
+                        ImGui::EndMenu();
+                    }
+                    if (ImGui::BeginMenu("About"))
+                    {
+                        ZoneScopedN("About");
+                        ImGui::Text(ToString("Version: %.01f", g_applicationVersion).c_str());
+                        if (ImGui::MenuItem("Github Releases"))
+                            RunProcess("https://github.com/CharlesHenryVIII/UATHelper/releases", nullptr, true);
                         ImGui::EndMenu();
                     }
                     ImGui::EndMenuBar();
@@ -964,7 +969,7 @@ int main(int, char**)
 
                 if (exitProgram)
                 {
-                    if (modifiedSettings)
+                    if (!ConfigIsSameAsLastLoad(settings))
                     {
                         ImGuiWindowFlags flags =
                             ImGuiWindowFlags_NoCollapse |

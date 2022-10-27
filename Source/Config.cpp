@@ -475,6 +475,10 @@ if (s. ## __member != fileSettings. ## __member)\
 if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__index]. ## __member)\
     return false
 
+#define ARRAYS_ARE_DIFFERENT2(a, b) if (!ArraysAreTheSame(a, b))\
+    return false
+#define ARRAYSAREDIFFERENT4(a, b, c, d) if (!ArraysAreTheSame(a, b, c, d))\
+    return false
 
     ROOTCMP(platformSelection);
     ROOTCMP(colorSelection);
@@ -483,10 +487,10 @@ if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__in
     ROOTCMP(projectPath);
     ROOTCMP(UPS);
 
-    ArraysAreTheSame(s.versionOptions,  fileSettings.versionOptions );
-    ArraysAreTheSame(s.switchOptions,   fileSettings.switchOptions  );
-    ArraysAreTheSame(s.preBuildEvents,  fileSettings.preBuildEvents );
-    ArraysAreTheSame(s.postBuildEvents, fileSettings.postBuildEvents);
+    ARRAYS_ARE_DIFFERENT2(s.versionOptions,  fileSettings.versionOptions);
+    ARRAYS_ARE_DIFFERENT2(s.switchOptions,   fileSettings.switchOptions);
+    ARRAYS_ARE_DIFFERENT2(s.preBuildEvents,  fileSettings.preBuildEvents );
+    ARRAYS_ARE_DIFFERENT2(s.postBuildEvents, fileSettings.postBuildEvents);
 
     if (s.platformOptions.size() != fileSettings.platformOptions.size())
         return false;
@@ -495,10 +499,10 @@ if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__in
         for (s32 i = 0; i < s.platformOptions.size(); i++)
         {
             CHILDCMP(i, name);
-            ArraysAreTheSame(s.platformOptions[i].enabledVersions,  s.versionOptions,   fileSettings.platformOptions[i].enabledVersions,    fileSettings.versionOptions );
-            ArraysAreTheSame(s.platformOptions[i].enabledSwitches,  s.switchOptions,    fileSettings.platformOptions[i].enabledSwitches,    fileSettings.switchOptions  );
-            ArraysAreTheSame(s.platformOptions[i].enabledPreBuild,  s.preBuildEvents,   fileSettings.platformOptions[i].enabledPreBuild,    fileSettings.preBuildEvents );
-            ArraysAreTheSame(s.platformOptions[i].enabledPostBuild, s.postBuildEvents,  fileSettings.platformOptions[i].enabledPostBuild,   fileSettings.postBuildEvents);
+            ARRAYSAREDIFFERENT4(s.platformOptions[i].enabledVersions,  s.versionOptions,   fileSettings.platformOptions[i].enabledVersions,    fileSettings.versionOptions );
+            ARRAYSAREDIFFERENT4(s.platformOptions[i].enabledSwitches,  s.switchOptions,    fileSettings.platformOptions[i].enabledSwitches,    fileSettings.switchOptions  );
+            ARRAYSAREDIFFERENT4(s.platformOptions[i].enabledPreBuild,  s.preBuildEvents,   fileSettings.platformOptions[i].enabledPreBuild,    fileSettings.preBuildEvents );
+            ARRAYSAREDIFFERENT4(s.platformOptions[i].enabledPostBuild, s.postBuildEvents,  fileSettings.platformOptions[i].enabledPostBuild,   fileSettings.postBuildEvents);
         }
     }
 

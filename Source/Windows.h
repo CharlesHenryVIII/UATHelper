@@ -12,6 +12,7 @@ void        InitOS(SDL_Window* window);
 static bool keepOpen = true;
 void ShowErrorWindow        (const std::string& title, const std::string& text);
 s32 ShowCustomErrorWindow  (const std::string& title, const std::string& text);
+void NotifyWindowBuildFinished();
 enum MessageBoxResponse : s32 {
     MessageBoxResponse_Invalid,
     MessageBoxResponse_OpenLog,
