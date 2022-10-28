@@ -120,10 +120,10 @@ void InitOS(SDL_Window* window)
 {
     instMod = GetModuleHandle(NULL);
     assert(instMod != NULL);
-    SDL_SysWMinfo wminfo;
+    SDL_SysWMinfo wminfo = {};
     SDL_VERSION(&wminfo.version);
-    assert(SDL_GetWindowWMInfo(window, &wminfo));
-    windowHandle = wminfo.info.win.window;
+    if (SDL_GetWindowWMInfo(window, &wminfo))
+        windowHandle = wminfo.info.win.window;
     assert(windowHandle);
     icon = LoadIcon(instMod, MAKEINTRESOURCE(IDI_ICON1));
     assert(icon != NULL);

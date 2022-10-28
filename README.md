@@ -17,8 +17,4 @@
 - [ ] Look into possibly removing one of file paths currently needed
 - [ ] Make "Run" bigger?
 - [ ] cleanup?
-- [X] About
-- [X] Versioning (downloading new version?)
-- [X] Remove the need to compare settings every frame
-- [X] Add alerting when a build completes
 - [ ] Do we need seperate configs for each new file path or do they share the same settings?

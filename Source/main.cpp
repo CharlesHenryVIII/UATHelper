@@ -626,8 +626,16 @@ int main(int, char**)
                             SaveConfig(settings);
                             LoadConfig(settings);//clear any out of bounds indices
                         }
-                        if (ImGui::MenuItem("Load"/*, "Ctrl+L"*/))
+                        if (ImGui::MenuItem("Reload"/*, "Ctrl+L"*/))
                             LoadConfig(settings);
+                        if (ImGui::BeginMenu("Load"))
+                        {
+                            //LoadConfig(settings);
+                            ImGui::MenuItem("ConfigFile1.json");
+                            ImGui::MenuItem("ConfigFile2.json");
+                            ImGui::MenuItem("ConfigFile3.json");
+                            ImGui::EndMenu();
+                        }
                         if (ImGui::MenuItem("Clear"))
                             ClearConfig(settings);
                         if (ImGui::MenuItem("Open"))
@@ -673,7 +681,7 @@ int main(int, char**)
                     ImGui::PushItemWidth(-FLT_MIN);
                     InputTextDynamicSize("##" + demoMainDir, settings.rootPath);
                     CleanPathString(settings.rootPath);
-                    if (settings.rootPath[settings.rootPath.size() - 1] != '/')
+                    if (settings.rootPath.size() && settings.rootPath[settings.rootPath.size() - 1] != '/')
                         settings.rootPath = settings.rootPath + '/';
 
                     ImGui::Text("Path to .uproject");
