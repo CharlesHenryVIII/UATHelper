@@ -6,10 +6,16 @@
 #include <fstream>
 
 
-const char* configFileName          = "UATHelperConfig.json";
-const char* platformSelectionText   = "Platform Selection";
+const char* appSettingsFileName     = "UATHelper.json";
+const char* majorRevText            = "Major Revision";
+const char* minorRevText            = "Minor Revision";
+const char* UPSText                 = "Updates Per Second";
 const char* colorSelectionText      = "Color Selection";
 const char* styleSelectionText      = "Style Selection";
+const char* currentFileText         = "Currently Loaded File";
+const char* configDirectoryText     = "Config Directory";
+
+const char* platformSelectionText   = "Platform Selection";
 const char* rootPathText            = "Root Path";
 const char* projectPathText         = "Project Path";
 const char* versionOptionsText      = "Version Options";
@@ -22,11 +28,10 @@ const char* enabledVersionsText     = "Enabled Versions";
 const char* enabledSwitchesText     = "Enabled Switches";
 const char* enabledPreBuildText     = "Enabled Pre Build";
 const char* enabledPostBuildText    = "Enabled Post Build";
-const char* UPSText                 = "Updates Per Second";
-const s32 currentVersion = 1;
 
-Settings fileSettings;
 
+Settings fileSettings = {};
+AppSettings appSettings = {};
 
 void BuildEvents::RemoveNullElements()
 {
@@ -170,18 +175,15 @@ void AddBuildEvents(nlohmann::json& j, const char* name, const BuildEvents& even
         j[name].push_back(events.m_events[i].name);
     }
 }
-void SaveConfig(Settings& settings)
+void SaveConfig(Settings& settings, const std::string& filename)
 {
     SortConfig(settings);
     nlohmann::json j;
 
-    j[versionText]              = currentVersion;
+    j[versionText]              = settings.version;
     j[platformSelectionText]    = settings.platformSelection;
-    j[colorSelectionText]       = settings.colorSelection;
-    j[styleSelectionText]       = settings.styleSelection;
     j[rootPathText]             = settings.rootPath;
     j[projectPathText]          = settings.projectPath;
-    j[UPSText]                  = settings.UPS;
 
     for (s32 i = 0; i < settings.platformOptions.size(); i++)
     {
@@ -205,7 +207,7 @@ void SaveConfig(Settings& settings)
 
     fileSettings = settings;
 
-    std::ofstream o(configFileName);
+    std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
 }
 
@@ -299,31 +301,35 @@ void GetTypeFromValid(const nlohmann::json& root, const char* name, T& var)
     }
 }
 
-bool LoadConfig(Settings& settings)
+void LoadConfig(Settings& settings, const AppSettings& appSettings)
 {
     fileSettings = {};
-    std::ifstream file(configFileName);
+    settings = {};
+    std::ifstream file(appSettings.fileNames[appSettings.currentFileNameIndex]);
     if (file.fail())
-        return false;
+    {
+        LoadConfigDefaults(settings);
+        return;
+    }
     nlohmann::json j;
     file >> j;
 
-    if (!Valid(j, versionText) || j[versionText].get<s32>() != currentVersion)
-        return false;
+    if (!Valid(j, versionText) || j[versionText].get<s32>() != fileSettings.version)
+    {
+        LoadConfigDefaults(settings);
+        return;
+    }
 
     GetTypeFromValid<s32>(          j, platformSelectionText,   fileSettings.platformSelection);
-    GetTypeFromValid<s32>(          j, colorSelectionText,      fileSettings.colorSelection);
-    GetTypeFromValid<s32>(          j, styleSelectionText,      fileSettings.styleSelection);
     GetTypeFromValid<std::string>(  j, rootPathText,            fileSettings.rootPath);
     GetTypeFromValid<std::string>(  j, projectPathText,         fileSettings.projectPath);
-    GetTypeFromValid<float>(        j, UPSText,                 fileSettings.UPS);
 
     GetChildrenString(j, versionOptionsText,   fileSettings.versionOptions);
     GetChildrenString(j, switchOptionsText,    fileSettings.switchOptions);
     GetChildrenString(j, preBuildEventsText,  fileSettings.preBuildEvents);
     GetChildrenString(j, postBuildEventsText, fileSettings.postBuildEvents);
 
-    assert(Valid(j, platformOptionsText));
+    //assert(Valid(j, platformOptionsText));
 
     for (auto it = j[platformOptionsText].begin(); it != j[platformOptionsText].end(); it++)
     {
@@ -343,18 +349,16 @@ bool LoadConfig(Settings& settings)
 
     settings = fileSettings;
 
-    Color_Set(settings.colorSelection);
-    Style_Set(settings.styleSelection);
     ValidateLoadConfig(settings);
+
+     
     
-    return true;
+    return;
 }
 
-void LoadDefaults(Settings& settings)
+void LoadConfigDefaults(Settings& settings)
 {
-    settings.UPS = 60.0f;
     settings.platformOptions.push_back({ "Win64" });
-    settings.platformOptions.push_back({ "XboxOne" });
     settings.platformOptions.push_back({ "XboxOneGDK" });
     settings.platformOptions.push_back({ "XSX" });
     settings.platformOptions.push_back({ "PS4" });
@@ -382,9 +386,6 @@ void LoadDefaults(Settings& settings)
     settings.switchOptions.push_back({ "skipbuild" });
     settings.switchOptions.push_back({ "servertargetplatform=win64" });
     settings.switchOptions.push_back({ "serverconfig=Development" });
-
-    Color_Set(settings.colorSelection);
-    Style_Set(settings.styleSelection);
 }
 
 void ClearConfig(Settings& settings)
@@ -481,11 +482,8 @@ if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__in
     return false
 
     ROOTCMP(platformSelection);
-    ROOTCMP(colorSelection);
-    ROOTCMP(styleSelection);
     ROOTCMP(rootPath);
     ROOTCMP(projectPath);
-    ROOTCMP(UPS);
 
     ARRAYS_ARE_DIFFERENT2(s.versionOptions,  fileSettings.versionOptions);
     ARRAYS_ARE_DIFFERENT2(s.switchOptions,   fileSettings.switchOptions);
@@ -509,4 +507,92 @@ if (s.platformOptions[__index]. ## __member != fileSettings.platformOptions[__in
 
 
     return true;
+}
+
+void SaveAppSettings(AppSettings& settings)
+{
+    nlohmann::json j;
+
+    j[majorRevText]         = settings.majorRev;
+    j[minorRevText]         = settings.minorRev;
+    j[colorSelectionText]   = settings.colorSelection;
+    j[styleSelectionText]   = settings.styleSelection;
+    j[UPSText]              = settings.UPS;
+    if (settings.fileNames.size() && settings.currentFileNameIndex >= 0 && settings.currentFileNameIndex < settings.fileNames.size())
+        j[currentFileText] = settings.fileNames[settings.currentFileNameIndex];
+    else
+        j[currentFileText] = {};
+    j[configDirectoryText]  = settings.configDirectory;
+
+    std::ofstream o(appSettingsFileName);
+    o << std::setw(4) << j << std::endl;
+    LoadAppSettings(settings);
+}
+
+void LoadAppSettings(AppSettings& settings)
+{
+    appSettings = {};
+    std::ifstream file(appSettingsFileName);
+    if (file.fail())
+    {
+        LoadDefaultAppSettings(settings);
+        return;
+    }
+    nlohmann::json j;
+    file >> j;
+
+    if ((!Valid(j, majorRevText) || j[majorRevText].get<s32>() != appSettings.majorRev) || 
+        (!Valid(j, minorRevText) || j[minorRevText].get<s32>() != appSettings.minorRev))
+    {
+        LoadDefaultAppSettings(settings);
+        return;
+    }
+
+    GetTypeFromValid<s32>(  j, majorRevText,        appSettings.majorRev);
+    GetTypeFromValid<s32>(  j, minorRevText,        appSettings.minorRev);
+    GetTypeFromValid<s32>(  j, colorSelectionText,  appSettings.colorSelection);
+    GetTypeFromValid<s32>(  j, styleSelectionText,  appSettings.styleSelection);
+    GetTypeFromValid<float>(j, UPSText,             appSettings.UPS);
+    GetTypeFromValid<std::string>(j, configDirectoryText, appSettings.configDirectory);
+
+    ScanDirectoryForConfigs(appSettings);
+    appSettings.currentFileNameIndex = -1;
+    if (Valid(j, currentFileText))
+    {
+        for (s32 i = 0; i < appSettings.fileNames.size(); i++)
+        {
+            if (appSettings.fileNames[i] == j[currentFileText])
+            {
+                appSettings.currentFileNameIndex = i;
+            }
+        }
+    }
+
+    settings = appSettings;
+
+    Color_Set(settings.colorSelection);
+    Style_Set(settings.styleSelection);
+}
+
+void LoadDefaultAppSettings(AppSettings& appSet)
+{
+    appSet = {};
+}
+
+void ScanDirectoryForConfigs(AppSettings& settings)
+{
+    //TODO: Add ability to work with case insensitivity
+    std::vector<std::string> fileNames;
+    ScanDirectoryForFileNames(settings.configDirectory, fileNames);
+    for (s32 i = 0; i < fileNames.size(); i++)
+    {
+        std::string_view name = fileNames[i];
+        if (name.size() > 9 + 5)
+        {
+            if (name.starts_with("UATHelper") && name.ends_with(".json"))
+            {
+                settings.fileNames.push_back(fileNames[i]);
+            }
+        }
+    }
 }

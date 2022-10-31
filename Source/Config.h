@@ -29,17 +29,10 @@ struct BuildEvents {
 };
 
 struct Settings {
+    s32 version = 2;
     s32 platformSelection = 0;
-    s32 colorSelection = {};
-    s32 styleSelection = {};
-    float UPS = 144.0f; //updates per second
-#if 1
     std::string rootPath;
     std::string projectPath;
-#else
-    std::vector<std::string> rootPath;
-    std::vector<std::string> projectPath;
-#endif
     std::vector<std::string> versionOptions;
     std::vector<std::string> switchOptions;
     BuildEvents preBuildEvents;
@@ -47,10 +40,25 @@ struct Settings {
     std::vector<PlatformSettings> platformOptions;
 };
 
+struct AppSettings {
+    s32 majorRev = 1;
+    s32 minorRev = 3;
+    float UPS = 60.0f; //updates per second
+    s32 colorSelection = {};
+    s32 styleSelection = {};
+    s32 currentFileNameIndex = -1;
+    std::vector<std::string> fileNames;
+    std::string configDirectory;
+};
 
 void SortConfig(Settings& settings);
-void SaveConfig(Settings& settings);
-bool LoadConfig(Settings& settings);
-void LoadDefaults(Settings& settings);
+void SaveConfig(Settings& settings, const std::string& filename);
+void LoadConfig(Settings& settings, const AppSettings& appSettings);
+void LoadConfigDefaults(Settings& settings);
 void ClearConfig(Settings& settings);
 bool ConfigIsSameAsLastLoad(const Settings& settings);
+
+void SaveAppSettings(AppSettings& settings);
+void LoadAppSettings(AppSettings& settings);
+void LoadDefaultAppSettings(AppSettings& appSet);
+void ScanDirectoryForConfigs(AppSettings& settings);

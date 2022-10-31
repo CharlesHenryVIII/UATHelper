@@ -17,4 +17,7 @@
 - [ ] Look into possibly removing one of file paths currently needed
 - [ ] Make "Run" bigger?
 - [ ] cleanup?
-- [ ] Do we need seperate configs for each new file path or do they share the same settings?
+- [X] Do we need seperate configs for each new file path or do they share the same settings?
+- [ ] Copy current active switch selection to clipboard
+- [X] Add button to select different config directory
+- [X] Add button to create new config file

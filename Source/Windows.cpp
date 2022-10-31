@@ -249,3 +249,99 @@ void NotifyWindowBuildFinished()
 
     FlashWindowEx(&info);
 }
+
+void ScanDirectoryForFileNames(const std::string& dir, std::vector<std::string>& out)
+{
+    out.clear();
+
+    std::string d = dir;
+    if (dir.size() < 2)
+    {
+        d = "*";
+    }
+    else
+    {
+
+        if (d[d.size() - 1] != '*')
+        {
+            if (d[d.size() - 1] != '/')
+            {
+                d += '/';
+            }
+            d += '*';
+        }
+    }
+	
+
+    WIN32_FIND_DATAA find_data;
+    HANDLE handle = FindFirstFileA(d.c_str(), &find_data);
+    while (true)
+	{
+		if (!(find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+		{
+            out.push_back(find_data.cFileName);
+		}
+        if (FindNextFileA(handle, &find_data) == 0)
+        {
+            //if (GetLastError() == ERROR_NO_MORE_FILES)
+            break;
+        }
+	}
+}
+
+#include "shlobj_core.h"
+
+static int CALLBACK BrowseFolderCallback(HWND hwnd, UINT uMsg, LPARAM lParam, LPARAM lpData)
+{
+    if (uMsg == BFFM_INITIALIZED) {
+        LPCTSTR path = LPCTSTR(lpData);
+        ::SendMessage(hwnd, BFFM_SETSELECTION, true, (LPARAM)path);
+    }
+    return 0;
+}
+
+bool GetDirectoryFromUser(const std::string& currentDir, std::string& dir)
+{
+    std::string baseDir = currentDir;
+    if (currentDir.size() == 0)
+    {
+        TCHAR buf[MAX_PATH] = { 0 };
+        GetModuleFileName(NULL, buf, MAX_PATH);
+        std::string::size_type pos = std::string(buf).find_last_of("\\/");
+        baseDir = std::string(buf).substr(0, pos);
+    }
+    dir.clear();
+    dir.resize(MAX_PATH);
+    int imageIndex = 0;
+    BROWSEINFOA info = {
+        .hwndOwner = windowHandle,
+        .pidlRoot = NULL,
+        .pszDisplayName = NULL,//dir.data(),
+        .lpszTitle = "Select Config Directory",
+        .ulFlags =  BIF_USENEWUI, //BIF_EDITBOX | BIF_NEWDIALOGSTYLE,
+        .lpfn = BrowseFolderCallback,//NULL,
+        .lParam = (LPARAM)baseDir.c_str(), //NULL,
+        .iImage = imageIndex,
+    };
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    PIDLIST_ABSOLUTE pidl = SHBrowseForFolderA(&info);
+    if (pidl == NULL)
+        return false;
+    BOOL result = SHGetPathFromIDListA(pidl, dir.data());
+
+    auto pos = dir.find_first_of('\0');
+    if (pos != std::string::npos)
+        dir.resize(pos);
+
+    if (result)
+    {
+        std::string_view dir1 = dir;
+        std::string_view dir2 = baseDir;
+        if (dir1.find(dir2) != std::string::npos && dir2.find(dir1) != std::string::npos)
+        {
+            dir.clear();
+        }
+        return true;
+    }
+    return false;
+}

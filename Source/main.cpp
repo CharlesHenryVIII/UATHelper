@@ -27,8 +27,6 @@
 #include <SDL_opengl.h>
 #endif
 
-const float g_applicationVersion = 1.3f;
-
 
 [[nodiscard]] inline ImVec2 HadamardProduct(const ImVec2& a, const ImVec2& b)
 {
@@ -126,8 +124,72 @@ void OpenModifyingPrompt(std::string& s)
         ImGui::EndPopup();
     }
 }
+s32* s_modifyingTextIndex = nullptr;
+void EditModifyingPromptFile(std::string& s, s32* index)
+{
+    s_unmodifiedText = s;
+    s_modifyingText = &s;
+    s_modifyingTextIndex = index;
 
+}
+//void OpenModifyingPromptFile(std::string& s, s32* index)
+//{
+//    if (ImGui::BeginPopupContextItem())
+//    {
+//        if (ImGui::Selectable("Edit"))
+//        {
+//            s_unmodifiedText = s;
+//            s_modifyingText = &s;
+//            ImGui::CloseCurrentPopup();
+//        }
+//
+//        if (ImGui::Selectable("Delete"))
+//        {
+//            s.clear();
+//            ImGui::CloseCurrentPopup();
+//        }
+//        ImGui::EndPopup();
+//    }
+//}
 
+//bool s_openConfigSelectionPopup = false;
+void SaveCurrentOrCreateNewConfig(AppSettings& appSettings, Settings& settings)
+{
+    if (appSettings.fileNames.size())
+    {
+        if (appSettings.currentFileNameIndex >= 0 && appSettings.currentFileNameIndex < appSettings.fileNames.size())
+        {
+            SaveConfig(settings, appSettings.fileNames[appSettings.currentFileNameIndex]);
+            LoadConfig(settings, appSettings);//clear any out of bounds indices
+        }
+        else
+        {
+            std::string blah;
+            appSettings.fileNames.push_back(blah);
+            appSettings.currentFileNameIndex = s32(appSettings.fileNames.size() - 1);
+            EditModifyingPromptFile(appSettings.fileNames[appSettings.currentFileNameIndex], &appSettings.currentFileNameIndex);
+        }
+    }
+    else
+    {
+        std::string blah;
+        appSettings.fileNames.push_back(blah);
+        appSettings.currentFileNameIndex = s32(appSettings.fileNames.size() - 1);
+        EditModifyingPromptFile(appSettings.fileNames[appSettings.currentFileNameIndex], &appSettings.currentFileNameIndex);
+    }
+}
+bool GetStringFromSTDVector(void* data, int idx, const char** out_text)
+{
+    if (!data)
+        return false;
+    
+    std::vector<std::string>* d = (std::vector<std::string>*)data;
+    if (idx <= d->size())
+        return false;
+    
+    *out_text = (*d)[idx].c_str();
+    return true;
+}
 
 
 
@@ -500,13 +562,16 @@ int main(int, char**)
     ImGui_ImplOpenGL3_Init(glsl_version);
     InitOS(window);
     ThemesInit();
-    
-    Settings settings;
-    if (!LoadConfig(settings))
-    {
-        LoadDefaults(settings);
-    }
 
+    AppSettings appSettings;
+    LoadAppSettings(appSettings);
+    Settings settings = {};
+
+    if (appSettings.fileNames.size())
+    {
+        if (appSettings.currentFileNameIndex >= 0 && appSettings.currentFileNameIndex < appSettings.fileNames.size())
+            LoadConfig(settings, appSettings);
+    }
 
 
     //ImFont* mainFont = io.Fonts->AddFontFromFileTTF("Assets/DroidSans.ttf", 16);
@@ -547,21 +612,32 @@ int main(int, char**)
             // - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
             // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
             // Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
-            SDL_Event event;
-            while (SDL_PollEvent(&event))
             {
-                ImGui_ImplSDL2_ProcessEvent(&event);
-                if (event.type == SDL_QUIT)
-                    exitProgram = true;
-                if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window))
-                    exitProgram = true;
+                ZoneScopedN("Poll Events");
+                SDL_Event event;
+                u64 i = 0;
+                while (SDL_PollEvent(&event))
+                {
+                    i++;
+                    ImGui_ImplSDL2_ProcessEvent(&event);
+                    if (event.type == SDL_QUIT)
+                        exitProgram = true;
+                    if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == SDL_GetWindowID(window))
+                        exitProgram = true;
+                }
+                std::string r = ToString("Poll Events Count: %i", i);
+                TracyMessage(r.c_str(), r.size());
             }
 
-            // Start the Dear ImGui frame
-            ImGui_ImplOpenGL3_NewFrame();
-            ImGui_ImplSDL2_NewFrame();
-            ImGui::NewFrame();
-            //ImGui::PushFont(mainFont);
+
+            {
+                ZoneScopedN("Create New Frame");
+                // Start the Dear ImGui frame
+                ImGui_ImplOpenGL3_NewFrame();
+                ImGui_ImplSDL2_NewFrame();
+                ImGui::NewFrame();
+                //ImGui::PushFont(mainFont);
+            }
 #if 1
             if (buildRunning && threading.GetJobsInFlight() == 0)
             {
@@ -597,25 +673,34 @@ int main(int, char**)
                 ZoneScopedN("Main");
                 if (ImGui::BeginMenuBar())
                 {
-                    if (ImGui::BeginMenu("Settings"))
+                    if (ImGui::BeginMenu("App Settings"))
                     {
-                        ZoneScopedN("Settings");
+                        ZoneScopedN("App Settings");
                         ImGui::Text("Color:");
                         ImGui::SameLine();
                         ImGui::SetNextItemWidth(100);
-                        if (ImGui::Combo("##Color", &settings.colorSelection, GetCStringFromThemes, &ColorOptions, (s32)Color_Count))
-                            Color_Set(settings.colorSelection);
+                        if (ImGui::Combo("##Color", &appSettings.colorSelection, GetCStringFromThemes, &ColorOptions, (s32)Color_Count))
+                        {
+                            Color_Set(appSettings.colorSelection);
+                            SaveAppSettings(appSettings);
+                        }
                         ImGui::Text("Style:");
                         ImGui::SameLine();
                         ImGui::SetNextItemWidth(100);
-                        if (ImGui::Combo("##Style", &settings.styleSelection, GetCStringFromThemes, &StyleOptions, (s32)Style_Count))
-                            Style_Set(settings.styleSelection);
+                        if (ImGui::Combo("##Style", &appSettings.styleSelection, GetCStringFromThemes, &StyleOptions, (s32)Style_Count))
+                        {
+                            Style_Set(appSettings.styleSelection);
+                            SaveAppSettings(appSettings);
+                        }
                         ImGui::Text("UPS:");
                         ImGui::SameLine();
                         HelpMarker("This changes the updates per second of the application");
                         ImGui::SameLine();
                         ImGui::SetNextItemWidth(90.0f);
-                        ImGui::InputFloat("##Updates Per Second", &settings.UPS, 1.0f, 10.0f, "%.1f");
+                        if (ImGui::InputFloat("##Updates Per Second", &appSettings.UPS, 1.0f, 10.0f, "%.1f"))
+                        {
+                            SaveAppSettings(appSettings);
+                        }
                         ImGui::EndMenu();
                     }
                     if (ImGui::BeginMenu("Config"))
@@ -623,29 +708,63 @@ int main(int, char**)
                         ZoneScopedN("Config");
                         if (ImGui::MenuItem("Save"/*, "Ctrl+S"*/))
                         {
-                            SaveConfig(settings);
-                            LoadConfig(settings);//clear any out of bounds indices
+                            SaveCurrentOrCreateNewConfig(appSettings, settings);
+                            //SaveAppSettings(appSettings);
                         }
-                        if (ImGui::MenuItem("Reload"/*, "Ctrl+L"*/))
-                            LoadConfig(settings);
                         if (ImGui::BeginMenu("Load"))
                         {
-                            //LoadConfig(settings);
-                            ImGui::MenuItem("ConfigFile1.json");
-                            ImGui::MenuItem("ConfigFile2.json");
-                            ImGui::MenuItem("ConfigFile3.json");
+                            if (appSettings.fileNames.size() == 0)
+                            {
+                                ImGui::BeginDisabled();
+                                ImGui::Text("No Config Files Found");
+                                ImGui::EndDisabled();
+                            }
+                            else
+                            {
+                                for (s32 i = 0; i < appSettings.fileNames.size(); i++)
+                                {
+                                    bool selected = (i == appSettings.currentFileNameIndex);
+                                    if (ImGui::MenuItem(appSettings.fileNames[i].substr(9, appSettings.fileNames[i].size() - 9 - 5).c_str(), NULL, selected))
+                                    {
+                                        appSettings.currentFileNameIndex = i;
+                                        LoadConfig(settings, appSettings);
+                                        SaveAppSettings(appSettings);
+                                    }
+                                }
+                            }
                             ImGui::EndMenu();
                         }
+                        if (ImGui::MenuItem("New"))
+                        {
+                            appSettings.currentFileNameIndex = -1;
+                            SaveCurrentOrCreateNewConfig(appSettings, settings);
+                        }
                         if (ImGui::MenuItem("Clear"))
+                        {
                             ClearConfig(settings);
-                        if (ImGui::MenuItem("Open"))
-                            RunProcess("UATHelperConfig.json");
+                        }
+                        if (ImGui::MenuItem("Change Directory"))
+                        {
+                            std::string dir;
+                            if (GetDirectoryFromUser(appSettings.configDirectory, dir))
+                            {
+                                appSettings.configDirectory = dir;
+                                SaveAppSettings(appSettings);
+                            }
+                        }
+                        if (ImGui::MenuItem("Open Current File"))
+                        {
+                            std::string filePath = appSettings.fileNames[appSettings.currentFileNameIndex];
+                            if (appSettings.configDirectory.size())
+                                filePath = appSettings.configDirectory + "/" + filePath;
+                            RunProcess(filePath.c_str());
+                        }
                         ImGui::EndMenu();
                     }
                     if (ImGui::BeginMenu("About"))
                     {
                         ZoneScopedN("About");
-                        ImGui::Text(ToString("Version: %.01f", g_applicationVersion).c_str());
+                        ImGui::Text(ToString("Version: %i.%02i", appSettings.majorRev, appSettings.minorRev).c_str());
                         if (ImGui::MenuItem("Github Releases"))
                             RunProcess("https://github.com/CharlesHenryVIII/UATHelper/releases", nullptr, true);
                         ImGui::EndMenu();
@@ -940,40 +1059,142 @@ int main(int, char**)
                         RunProcess(logLoc.c_str(), nullptr, true);
                     //ImGui::Checkbox("Keep UAT CMD Window Open", &keepProcessWindowAlive);
 
-                    ImGui::Text("Application average %.3f ms/frame (%.1f FPS, Target: %.1f FPS)", 1000.0f / io.Framerate, io.Framerate, settings.UPS);
+                    ImGui::Text("Application average %.3f ms/frame (%.1f FPS, Target: %.1f FPS)", 1000.0f / io.Framerate, io.Framerate, appSettings.UPS);
                 }
                 ImGui::EndChild();
 
-                if (s_modifyingText != nullptr)
+                if (s_modifyingText)
                 {
-                    const char* title = "Edit Text";
-                    ImGui::SetNextWindowSize(ImVec2(500.0f, 0), ImGuiCond_Once);
-                    ImGui::OpenPopup(title);
-                    if (ImGui::BeginPopupModal(title))
+                    if (s_modifyingTextIndex == nullptr)
                     {
-                        float buttonHeight = 30.0f;
-                        float width = -FLT_MIN;
-                        ImGui::SetNextItemWidth(width);
-                        InputTextDynamicSize("##Modifying Text", *s_modifyingText);
-                        ImVec2 popupSize = ImGui::GetWindowSize();
-                        //TODO: add proper padding (this doesn't properly pad when there is rounding)
-                        if (ImGui::Button("Save", ImVec2((popupSize.x / 2.0f) - (1.5f * style.WindowPadding.x), buttonHeight)))
+                        const char* title = "Edit Text";
+                        ImGui::SetNextWindowSize(ImVec2(500.0f, 0), ImGuiCond_Once);
+                        ImGui::OpenPopup(title);
+                        if (ImGui::BeginPopupModal(title))
                         {
-                            s_modifyingText = nullptr;
-                            s_unmodifiedText.clear();
-                            ImGui::CloseCurrentPopup();
+                            float buttonHeight = 30.0f;
+                            float width = -FLT_MIN;
+                            ImGui::SetNextItemWidth(width);
+                            InputTextDynamicSize("##Modifying Text", *s_modifyingText);
+                            ImVec2 popupSize = ImGui::GetWindowSize();
+                            //TODO: add proper padding (this doesn't properly pad when there is rounding)
+                            if (ImGui::Button("Save", ImVec2((popupSize.x / 2.0f) - (1.5f * style.WindowPadding.x), buttonHeight)))
+                            {
+                                s_modifyingText = nullptr;
+                                s_unmodifiedText.clear();
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Close", ImVec2(-FLT_MIN, buttonHeight)))
+                            {
+                                *s_modifyingText = s_unmodifiedText;
+                                s_modifyingText = nullptr;
+                                s_unmodifiedText.clear();
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::EndPopup();
                         }
-                        ImGui::SameLine();
-                        if (ImGui::Button("Close", ImVec2(-FLT_MIN, buttonHeight)))
+                    }
+                    else
+                    {
+                        const char* title = "Name New File";
+                        ImGui::SetNextWindowSize(ImVec2(500.0f, 0), ImGuiCond_Once);
+                        ImGui::OpenPopup(title);
+                        if (ImGui::BeginPopupModal(title))
                         {
-                            *s_modifyingText = s_unmodifiedText;
-                            s_modifyingText = nullptr;
-                            s_unmodifiedText.clear();
-                            ImGui::CloseCurrentPopup();
+                            ImGui::Text("Please enter the name of the new file excluding the prefix and the file type, full name of the file below:");
+                            ImGui::Text("File Name: UATHelper%s.json", s_modifyingText->c_str());
+                            float buttonHeight = 30.0f;
+                            float width = -FLT_MIN;
+                            ImGui::SetNextItemWidth(width);
+                            InputTextDynamicSize("##Modifying Text", *s_modifyingText);
+                            ImVec2 popupSize = ImGui::GetWindowSize();
+                            //TODO: add proper padding (this doesn't properly pad when there is rounding)
+                            if (s_modifyingText->size() == 0)
+                                ImGui::BeginDisabled();
+                            if (ImGui::Button("Save", ImVec2((popupSize.x / 2.0f) - (1.5f * style.WindowPadding.x), buttonHeight)))
+                            {
+                                s_modifyingText = nullptr;
+                                s_unmodifiedText.clear();
+                                appSettings.currentFileNameIndex = *s_modifyingTextIndex;
+                                s_modifyingTextIndex = nullptr;
+
+                                std::string& filename = appSettings.fileNames[appSettings.currentFileNameIndex];
+                                filename = "UATHelper" + filename + ".json";
+
+                                //The only time the s_modifyingTextIndex is used is when saving
+                                SaveConfig(settings, appSettings.fileNames[appSettings.currentFileNameIndex]);
+                                LoadConfig(settings, appSettings);
+                                SaveAppSettings(appSettings);
+
+                                //If the save was triggered when the program was trying to close then close the program
+                                if (exitProgram)
+                                    done = true;
+
+                                ImGui::CloseCurrentPopup();
+                            }
+                            if (s_modifyingText && s_modifyingText->size() == 0)
+                                ImGui::EndDisabled();
+                            ImGui::SameLine();
+                            if (ImGui::Button("Close", ImVec2(-FLT_MIN, buttonHeight)))
+                            {
+                                *s_modifyingText = s_unmodifiedText;
+                                s_modifyingText = nullptr;
+                                s_unmodifiedText.clear();
+                                if (*s_modifyingTextIndex >= 0 && *s_modifyingTextIndex < appSettings.fileNames.size() && 
+                                    appSettings.fileNames[*s_modifyingTextIndex].size() < 9 + 5)
+                                    appSettings.fileNames.erase(appSettings.fileNames.begin() + *s_modifyingTextIndex);
+                                s_modifyingTextIndex = nullptr;
+                                ImGui::CloseCurrentPopup();
+                            }
+                            ImGui::EndPopup();
                         }
-                        ImGui::EndPopup();
                     }
                 }
+
+
+                //if (s_openConfigSelectionPopup == true)
+                //{
+                //    ImGui::SetNextWindowSize(ImVec2(500.0f, 0), ImGuiCond_Once);
+                //    const char* title = "Select Config";
+                //    ImGui::OpenPopup(title);
+                //    if (ImGui::BeginPopupModal(title))
+                //    {
+                //        ImGui::ListBox("Options", &appSettings.currentFileNameIndex, GetStringFromSTDVector, &appSettings.fileNames, appSettings.fileNames.size()))
+                //        float buttonHeight = 30.0f;
+                //        float width = -FLT_MIN;
+                //        ImGui::SetNextItemWidth(width);
+                //        InputTextDynamicSize("##Modifying Text", *s_modifyingText);
+                //        ImVec2 popupSize = ImGui::GetWindowSize();
+                //        //TODO: add proper padding (this doesn't properly pad when there is rounding)
+                //        if (ImGui::Button("Save", ImVec2((popupSize.x / 2.0f) - (1.5f * style.WindowPadding.x), buttonHeight)))
+                //        {
+                //            s_modifyingText = nullptr;
+                //            s_unmodifiedText.clear();
+                //            if (s_modifyingTextIndex)
+                //            {
+                //                appSettings.currentFileNameIndex = *s_modifyingTextIndex;
+                //                s_modifyingTextIndex = nullptr;
+                //            }
+                //            ImGui::CloseCurrentPopup();
+                //        }
+                //        ImGui::SameLine();
+                //        if (ImGui::Button("Close", ImVec2(-FLT_MIN, buttonHeight)))
+                //        {
+                //            *s_modifyingText = s_unmodifiedText;
+                //            s_modifyingText = nullptr;
+                //            s_unmodifiedText.clear();
+                //            if (s_modifyingTextIndex)
+                //            {
+                //                if (appSettings.fileNames[*s_modifyingTextIndex].size() < 9 + 5 )
+                //                    appSettings.fileNames.erase(appSettings.fileNames.begin() + *s_modifyingTextIndex);
+                //                s_modifyingTextIndex = nullptr;
+                //            }
+                //            ImGui::CloseCurrentPopup();
+                //        }
+                //        ImGui::EndPopup();
+                //    }
+                //}
 
                 if (exitProgram)
                 {
@@ -995,8 +1216,8 @@ int main(int, char**)
                             ImGui::TextWrapped("The application is being closed without being saved, are you sure you want to continue?");
                             if (ImGui::Button("Save and Exit", ImVec2(-FLT_MIN, buttonHeight)))
                             {
-                                SaveConfig(settings);
-                                done = true;
+                                SaveCurrentOrCreateNewConfig(appSettings, settings);
+                                //done = true;
                             }
                             ImVec2 saveButtonSize = ImGui::GetItemRectSize();
                             if (ImGui::Button("Exit Without Saving", ImVec2(saveButtonSize.x * (2.0f / 3.0f), buttonHeight)))
@@ -1057,7 +1278,7 @@ int main(int, char**)
         }
         FrameMark;
         u64 frameEndTicks = SDL_GetTicks64();
-        float MSPerUpdate = ((1.0f / settings.UPS) * 1000.0f);
+        float MSPerUpdate = ((1.0f / appSettings.UPS) * 1000.0f);
         u64 delayAmount = (u64)((u64)MSPerUpdate - (frameEndTicks - frameStartTicks));
         u64 clamped = Clamp<u64>(delayAmount, 0, (u64)MSPerUpdate);
         SDL_Delay((u32)clamped);

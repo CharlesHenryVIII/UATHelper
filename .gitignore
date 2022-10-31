@@ -53,4 +53,4 @@ x64/
 # Custom Files
 GenerateProjectFiles.bat
 imgui.ini
-UATHelperConfig.json
+UATHelper*.json

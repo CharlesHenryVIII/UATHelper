@@ -13,6 +13,8 @@ static bool keepOpen = true;
 void ShowErrorWindow        (const std::string& title, const std::string& text);
 s32 ShowCustomErrorWindow  (const std::string& title, const std::string& text);
 void NotifyWindowBuildFinished();
+void ScanDirectoryForFileNames(const std::string& dir, std::vector<std::string>& out);
+bool GetDirectoryFromUser(const std::string& currentDir, std::string& dir);
 enum MessageBoxResponse : s32 {
     MessageBoxResponse_Invalid,
     MessageBoxResponse_OpenLog,
