@@ -754,10 +754,13 @@ int main(int, char**)
                         }
                         if (ImGui::MenuItem("Open Current File"))
                         {
-                            std::string filePath = appSettings.fileNames[appSettings.currentFileNameIndex];
-                            if (appSettings.configDirectory.size())
-                                filePath = appSettings.configDirectory + "/" + filePath;
-                            RunProcess(filePath.c_str());
+                            if (appSettings.fileNames.size() && appSettings.currentFileNameIndex >= 0 && appSettings.currentFileNameIndex < appSettings.fileNames.size())
+                            {
+                                std::string filePath = appSettings.fileNames[appSettings.currentFileNameIndex];
+                                if (appSettings.configDirectory.size())
+                                    filePath = appSettings.configDirectory + "/" + filePath;
+                                RunProcess(filePath.c_str(), nullptr, true);
+                            }
                         }
                         ImGui::EndMenu();
                     }
@@ -893,11 +896,32 @@ int main(int, char**)
                     ImGui::SameLine();
                     HelpMarker("Added switches for build here, excluding the starting \"-\"(dash)");
                     ImGui::NewLine();
-                    static std::string name;
-                    if (NameStatusButtonAdd("Switch", name, 400.0f))
+                    static std::string localUniqueName;
+                    if (NameStatusButtonAdd("Switch", localUniqueName, 400.0f))
                     {
-                        settings.switchOptions.push_back({ name });
-                        name.clear();
+                        if (localUniqueName.size())
+                        {
+                            if (localUniqueName[0] == '-')
+                                localUniqueName.erase(0, 1);
+                            settings.switchOptions.push_back({ localUniqueName });
+                            localUniqueName.clear();
+                        }
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Copy Active Switches"))
+                    {
+                        std::string s;
+                        for (int i = 0; i < settings.switchOptions.size(); i++)
+                        {
+                            if (!settings.switchOptions[i].size())
+                                continue;
+                            s = s + "-" + settings.switchOptions[i] + " ";
+                        }
+                        if (s.size())
+                        {
+                            s.erase(s.size() - 1);
+                            SDL_SetClipboardText(s.c_str());
+                        }
                     }
                     ImGui::NewLine();
                     float window_visible_x2 = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;
@@ -1031,10 +1055,14 @@ int main(int, char**)
                     {
                         SDL_SetClipboardText(finalCommandLine.c_str());
                     }
+                    std::string logLoc = settings.rootPath + "Engine/Programs/AutomationTool/Saved/Logs/Log.txt";
                     ImGui::SameLine();
+                    if (ImGui::Button("Open Log"))
+                        RunProcess(logLoc.c_str(), nullptr, true);
+                    //ImGui::SameLine();
                     if (buildRunning || commandLineInvalid)
                         ImGui::BeginDisabled();
-                    bool runButtonHit = ImGui::Button("RUN");
+                    bool runButtonHit = ImGui::Button("RUN", ImVec2(200.0f, 50.0f));
                     if (runButtonHit)
                     {
                         SubmitProcessList(settings.preBuildEvents,
@@ -1053,10 +1081,6 @@ int main(int, char**)
                     }
                     if (buildRunning || commandLineInvalid)
                         ImGui::EndDisabled();
-                    std::string logLoc = settings.rootPath + "Engine/Programs/AutomationTool/Saved/Logs/Log.txt";
-                    ImGui::SameLine();
-                    if (ImGui::Button("Open Log"))
-                        RunProcess(logLoc.c_str(), nullptr, true);
                     //ImGui::Checkbox("Keep UAT CMD Window Open", &keepProcessWindowAlive);
 
                     ImGui::Text("Application average %.3f ms/frame (%.1f FPS, Target: %.1f FPS)", 1000.0f / io.Framerate, io.Framerate, appSettings.UPS);
