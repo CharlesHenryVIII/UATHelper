@@ -86,14 +86,19 @@ void StartProcessJob::RunJob()
 {
     const char* path = applicationPath.size()   ? applicationPath.c_str()   : nullptr;
     const char* args = arguments.size()         ? arguments.c_str()         : nullptr;
-    RunProcess(path, args);
+    s32 result = RunProcess(path, args);
+    if (result)
+    {
+        Threading::GetInstance().ClearJobs();
+    }
 }
 
 void RunUATJob::RunJob()
 {
     const char* path = applicationPath.size()   ? applicationPath.c_str()   : nullptr;
     const char* args = arguments.size()         ? arguments.c_str()         : nullptr;
-    if (s32 result = RunProcess(path, args))
+    s32 result = RunProcess(path, args);
+    if (result)
     {
         Threading::GetInstance().ClearJobs();
         switch (result)
