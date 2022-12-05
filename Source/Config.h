@@ -42,7 +42,7 @@ struct Settings {
 
 struct AppSettings {
     s32 majorRev = 1;
-    s32 minorRev = 3;
+    s32 minorRev = 4;
     float UPS = 60.0f; //updates per second
     s32 colorSelection = {};
     s32 styleSelection = {};

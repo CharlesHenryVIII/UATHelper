@@ -529,6 +529,24 @@ void SaveAppSettings(AppSettings& settings)
     LoadAppSettings(settings);
 }
 
+void Convert(s32 fromMajor, s32 fromMinor, AppSettings& settings, s32 toMajor, s32 toMinor)
+{
+    while (fromMajor != settings.majorRev || fromMinor != settings.minorRev)
+    {
+        if (fromMajor == 1)
+        {
+            switch (fromMinor)
+            {
+            case 3:
+                [[fallthrough]];
+            default:
+                fromMinor++;
+                //do nothing
+            }
+        }
+    }
+}
+
 void LoadAppSettings(AppSettings& settings)
 {
     appSettings = {};
@@ -541,11 +559,20 @@ void LoadAppSettings(AppSettings& settings)
     nlohmann::json j;
     file >> j;
 
-    if ((!Valid(j, majorRevText) || j[majorRevText].get<s32>() != appSettings.majorRev) || 
-        (!Valid(j, minorRevText) || j[minorRevText].get<s32>() != appSettings.minorRev))
+    if (!Valid(j, majorRevText) || !Valid(j, minorRevText))
     {
         LoadDefaultAppSettings(settings);
         return;
+    }
+    else
+    {
+        s32 major = j[majorRevText].get<s32>();
+        s32 minor = j[minorRevText].get<s32>();
+        if (major != appSettings.majorRev || minor != appSettings.minorRev)
+        {
+            //TODO: is this ever neccessary for app settings?
+            Convert(major, minor, settings, appSettings.majorRev, appSettings.minorRev);
+        }
     }
 
     GetTypeFromValid<s32>(  j, majorRevText,        appSettings.majorRev);
