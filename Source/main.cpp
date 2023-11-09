@@ -679,18 +679,26 @@ int main(int, char**)
                         ImGui::Text("Color:");
                         ImGui::SameLine();
                         ImGui::SetNextItemWidth(100);
+                        s32 colorSelection = appSettings.colorSelection;
                         if (ImGui::Combo("##Color", &appSettings.colorSelection, GetCStringFromThemes, &ColorOptions, (s32)Color_Count))
                         {
-                            Color_Set(appSettings.colorSelection);
-                            SaveAppSettings(appSettings);
+                            if (colorSelection != appSettings.colorSelection)
+                            {
+                                Color_Set(appSettings.colorSelection);
+                                SaveAppSettings(appSettings);
+                            }
                         }
                         ImGui::Text("Style:");
                         ImGui::SameLine();
                         ImGui::SetNextItemWidth(100);
+                        s32 styleSelection = appSettings.styleSelection;
                         if (ImGui::Combo("##Style", &appSettings.styleSelection, GetCStringFromThemes, &StyleOptions, (s32)Style_Count))
                         {
-                            Style_Set(appSettings.styleSelection);
-                            SaveAppSettings(appSettings);
+                            if (styleSelection != appSettings.styleSelection)
+                            {
+                                Style_Set(appSettings.styleSelection);
+                                SaveAppSettings(appSettings);
+                            }
                         }
                         ImGui::Text("UPS:");
                         ImGui::SameLine();
@@ -834,6 +842,8 @@ int main(int, char**)
                     if (NameStatusButtonAdd("Platform", platformAddText))
                     {
                         settings.platformOptions.push_back({ platformAddText });
+                        if (settings.platformOptions.size() == 1)
+                            settings.platformSelection = 0;
                         platformAddText.clear();
                     }
                     ImGui::SameLine();

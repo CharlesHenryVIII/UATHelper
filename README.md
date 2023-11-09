@@ -15,7 +15,5 @@
 ### TODO
 - [ ] Convert to GLFW to remove the dependancy on dlls
 - [ ] Look into possibly removing one of file paths currently needed
-- [X] Make "Run" bigger?
 - [ ] cleanup?
-- [X] Copy current active switch selection to clipboard
 - [ ] Add support for fonts

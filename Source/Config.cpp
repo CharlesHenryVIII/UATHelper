@@ -570,7 +570,7 @@ void LoadAppSettings(AppSettings& settings)
         s32 minor = j[minorRevText].get<s32>();
         if (major != appSettings.majorRev || minor != appSettings.minorRev)
         {
-            //TODO: is this ever neccessary for app settings?
+            //TODO: is this ever necessary for app settings?
             Convert(major, minor, settings, appSettings.majorRev, appSettings.minorRev);
         }
     }
