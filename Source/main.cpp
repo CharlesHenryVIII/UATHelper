@@ -4,11 +4,11 @@
 // Read online: https://github.com/ocornut/imgui/tree/master/docs
 
 #include "imgui.h"
-#include "imgui_impl_sdl.h"
-#include "imgui_impl_opengl3.h"
+#include "imgui/backends/imgui_impl_sdl2.h"
+#include "imgui/backends/imgui_impl_opengl3.h"
 
-//v0.8.2
-#include "tracy/Tracy.hpp"
+//v0.10.0
+#include "Tracy.hpp"
 
 #include "Windows.h"
 #include "Math.h"

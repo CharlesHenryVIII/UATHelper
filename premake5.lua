@@ -20,15 +20,15 @@ project "UATHelper"
    libdirs {
        "Contrib/SDL/lib/%{cfg.platform}/",
        "Contrib/imgui",
-       "Contrib/tracy-profiler",
+       "Contrib/tracy-master",
        --"Contrib/**",
    }
    includedirs {
-       "Contrib/*",
-       "Contrib/imgui/backends",
+       "Contrib",
+       "Contrib/imgui",
        "Contrib/SDL/include",
-       "Contrib/tracy-profiler/public/tracy",
-       "Contrib"
+       "Contrib/tracy-master/public/tracy",
+       "Contrib/json.hpp",
        --"Contrib/**"
    }
    flags {
@@ -45,11 +45,11 @@ project "UATHelper"
        --"Source/**.c",
        --"Source/**.cpp",
        --"Source/**.hpp",
-       "Contrib/tracy-profiler/TracyClient.cpp",
+       "Contrib/tracy-master/public/TracyClient.cpp",
        "Contrib/imgui/*.cpp",
        "Contrib/imgui/*.h",
-       "Contrib/imgui/backends/imgui_impl_opengl3.cpp",
-       "Contrib/imgui/backends/imgui_impl_sdl.cpp",
+       "Contrib/imgui/backends/imgui_impl_opengl3.*",
+       "contrib/ImGui/backends/imgui_impl_sdl2.*",
    }
 
 
