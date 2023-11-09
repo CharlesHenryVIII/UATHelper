@@ -27,7 +27,7 @@ project "UATHelper"
        "Contrib/*",
        "Contrib/imgui/backends",
        "Contrib/SDL/include",
-       "Contrib/tracy-profiler",
+       "Contrib/tracy-profiler/public/tracy",
        "Contrib"
        --"Contrib/**"
    }

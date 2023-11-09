@@ -8,7 +8,7 @@
 #include "imgui_impl_opengl3.h"
 
 //v0.8.2
-#include "Tracy.hpp"
+#include "tracy/Tracy.hpp"
 
 #include "Windows.h"
 #include "Math.h"
