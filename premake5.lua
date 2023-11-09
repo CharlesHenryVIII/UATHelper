@@ -67,10 +67,10 @@ project "UATHelper"
 
    filter "configurations:Profile"
       defines { "NDEBUG", "TRACY_ENABLE"}
-      symbols  "off"
-      optimize "On"
+      symbols  "on"
+      optimize "Speed"
 
    filter "configurations:Release"
       defines { "NDEBUG" }
-      symbols  "off"
-      optimize "On"
+      symbols  "on"
+      optimize "Speed"
